@@ -103,6 +103,7 @@ def create_tray_visualization(config):
 
     return fig
 
+
 def display_results(config, selected_experiments):
     col1, col2 = st.columns([3, 2])
 
@@ -113,13 +114,14 @@ def display_results(config, selected_experiments):
 
     with col2:
         st.subheader("Results Summary")
-        tray_life = min(result["total_tests"] for result in config["results"].values())
-        st.metric("Tray Life (Tests)", tray_life)
-
+        st.metric("Days of Operation", config["overall_days_of_operation"])
+        
         results_df = pd.DataFrame([
             {
                 "Experiment": f"{result['name']} (#{exp_num})",
-                "Total Tests": result['total_tests']
+                "Total Tests": result['total_tests'],
+                "Daily Tests": result['daily_count'],
+                "Days of Operation": result['days_of_operation']
             }
             for exp_num, result in config["results"].items()
         ])
@@ -158,6 +160,8 @@ def main():
         st.session_state.config = None
     if 'selected_experiments' not in st.session_state:
         st.session_state.selected_experiments = []
+    if 'daily_counts' not in st.session_state:
+        st.session_state.daily_counts = {}
 
     optimizer = ReagentOptimizer()
     experiments = optimizer.get_available_experiments()
@@ -167,28 +171,46 @@ def main():
         reset_app()
         st.rerun()
 
-    st.sidebar.header("Available Experiments")
+    # Experiment Selection
+    st.sidebar.header("1. Select Experiments")
     selected_experiments = []
     for exp in experiments:
         if st.sidebar.checkbox(f"{exp['id']}: {exp['name']}", key=f"exp_{exp['id']}"):
             selected_experiments.append(exp['id'])
 
+    # Manual Input Option
     st.sidebar.markdown("---")
     st.sidebar.markdown("Or enter experiment numbers manually:")
-    manual_input = st.sidebar.text_input("Experiment numbers (comma-separated)", placeholder="e.g., 1, 16, 29")
+    manual_input = st.sidebar.text_input(
+        "Experiment numbers (comma-separated)", 
+        placeholder="e.g., 1, 16, 29"
+    )
 
     if manual_input:
         selected_experiments = [int(num.strip()) for num in manual_input.split(',') if num.strip()]
 
-    optimize_button = st.sidebar.button("Optimize Configuration", key="optimize_button")
+    # Daily Count Input
+    if selected_experiments:
+        st.sidebar.header("2. Enter Daily Test Counts")
+        daily_counts = {}
+        
+        for exp_id in selected_experiments:
+            exp_name = next(exp['name'] for exp in experiments if exp['id'] == exp_id)
+            count = st.sidebar.number_input(
+                f"Daily tests for #{exp_id}: {exp_name}",
+                min_value=1,
+                value=st.session_state.daily_counts.get(exp_id, 1),
+                key=f"daily_count_{exp_id}"
+            )
+            daily_counts[exp_id] = count
+            st.session_state.daily_counts = daily_counts
 
-    if optimize_button:
-        if not selected_experiments:
-            st.sidebar.error("Please select at least one experiment")
-        else:
+        optimize_button = st.sidebar.button("3. Optimize Configuration", key="optimize_button")
+
+        if optimize_button:
             try:
                 with st.spinner("Optimizing tray configuration..."):
-                    config = optimizer.optimize_tray_configuration(selected_experiments)
+                    config = optimizer.optimize_tray_configuration(selected_experiments, daily_counts)
                 st.session_state.config = config
                 st.session_state.selected_experiments = selected_experiments
             except ValueError as e:
@@ -203,10 +225,11 @@ def main():
     st.sidebar.markdown("### How to use")
     st.sidebar.markdown("""
     1. Select experiments using checkboxes or enter numbers manually
-    2. Click 'Optimize Configuration'
-    3. View the tray visualization and results summary
-    4. Expand detailed results for each experiment
-    5. Click 'Reset All' to start fresh
+    2. Enter the number of daily tests needed for each experiment
+    3. Click 'Optimize Configuration'
+    4. View the tray visualization and results summary
+    5. Expand detailed results for each experiment
+    6. Click 'Reset All' to start fresh
     """)
 
 if __name__ == "__main__":
