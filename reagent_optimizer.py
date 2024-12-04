@@ -39,18 +39,20 @@ class ReagentOptimizer:
 
         self.MAX_LOCATIONS = 16
 
+ 
     def calculate_tests(self, volume_ul, capacity_ml):
         return int((capacity_ml * 1000) / volume_ul)
 
     def get_location_capacity(self, location):
         return 270 if location < 4 else 140
 
-    def optimize_tray_configuration(self, selected_experiments, daily_counts=None):
-        # Initialize daily_counts if not provided
-        if daily_counts is None:
-            daily_counts = {exp: 1 for exp in selected_experiments}
-            
-        # Validate experiments and counts
+    def calculate_days_for_volume(self, volume_ul, capacity_ml, daily_count):
+        """Calculate days of operation for a given volume and daily usage"""
+        tests = self.calculate_tests(volume_ul, capacity_ml)
+        return tests / daily_count if daily_count > 0 else float('inf')
+
+    def optimize_tray_configuration(self, selected_experiments, daily_counts):
+        # Validate inputs
         for exp in selected_experiments:
             if exp not in self.experiment_data:
                 raise ValueError(f"Invalid experiment number: {exp}")
