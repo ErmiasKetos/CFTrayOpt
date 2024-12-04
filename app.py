@@ -135,6 +135,7 @@ def create_tray_visualization(config, customer_info):
 
     return fig
 
+
 def display_results(config, selected_experiments, customer_info):
     col1, col2 = st.columns([3, 2])
 
@@ -150,7 +151,6 @@ def display_results(config, selected_experiments, customer_info):
     with col2:
         st.subheader("Results Summary")
         
-        # Key metrics in expander
         with st.expander("📊 Key Metrics", expanded=True):
             days_operation = config["overall_days_of_operation"]
             
@@ -174,7 +174,7 @@ def display_results(config, selected_experiments, customer_info):
                 "Daily Tests": result['daily_count'],
                 "Total Tests Possible": min(
                     result['total_tests'],
-                    int(result['daily_count'] * days_operation)
+                    int(days_operation * result['daily_count'])
                 ),
                 "Days of Operation": result['days_of_operation']
             }
@@ -186,28 +186,37 @@ def display_results(config, selected_experiments, customer_info):
             results_df.to_csv("tray_configuration_results.csv", index=False)
             st.success("Results downloaded as 'tray_configuration_results.csv'")
 
-
-    # Detailed Results in Expandable Sections
+    # Detailed Results
     st.subheader("Detailed Results")
     for exp_num, result in config["results"].items():
         with st.expander(f"📋 {result['name']} (#{exp_num}) - {result['total_tests']} total tests"):
             st.markdown(f"**Daily Usage:** {result['daily_count']} tests")
             st.markdown(f"**Days of Operation:** {result['days_of_operation']} days")
             
-            for i, set_info in enumerate(result["sets"]):
-                st.markdown(f"**{'Primary' if i == 0 else 'Additional'} Set {i+1}:**")
-                set_df = pd.DataFrame([
+            # Group reagents by location
+            reagent_locations = defaultdict(list)
+            for i, loc in enumerate(config["tray_locations"]):
+                if loc and loc["experiment"] == exp_num:
+                    reagent_locations[loc["reagent_code"]].append({
+                        "location": i + 1,
+                        "tests": loc["tests_possible"],
+                        "capacity": loc["capacity"],
+                        "volume": loc["volume_per_test"]
+                    })
+            
+            # Display reagent placements
+            for reagent_code, locations in reagent_locations.items():
+                st.markdown(f"**Reagent {reagent_code}:**")
+                locations_df = pd.DataFrame([
                     {
-                        "Reagent": placement["reagent_code"],
-                        "Location": f"LOC-{placement['location'] + 1}",
-                        "Tests Possible": placement["tests"],
-                        "Volume per Test (µL)": placement["volume"]
+                        "Location": f"LOC-{loc['location']}",
+                        "Capacity (mL)": loc["capacity"],
+                        "Tests Possible": loc["tests"],
+                        "Volume per Test (µL)": loc["volume"]
                     }
-                    for placement in set_info["placements"]
+                    for loc in locations
                 ])
-                st.dataframe(set_df, use_container_width=True)
-                st.markdown(f"**Tests from this set:** {set_info['tests_per_set']}")
-                st.markdown("---")
+                st.dataframe(locations_df, use_container_width=True)
 
 def reset_app():
     """Clears all session state variables to reset the app."""
