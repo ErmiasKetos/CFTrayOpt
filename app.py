@@ -376,6 +376,45 @@ def main():
            - Download configuration plot and results
         """)
 
+    # Footer
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("""
+    <div style='text-align: center; color: #666;'>
+    <small>Version 2.0 | Last Updated: 2024-03</small>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Main page information (when no configuration is shown)
+    if st.session_state.config is None:
+        st.markdown("""
+        <div class='header-box'>
+        <h2>Welcome to the Reagent Tray Configurator Pro! 👋</h2>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class='info-box'>
+        <h3>🎯 Key Features</h3>
+        
+        - Optimized tray configuration based on daily usage
+        - Smart allocation of high-capacity locations
+        - Detailed analysis of operational duration
+        - Downloadable reports and visualizations
+        - Easy experiment selection by category
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class='warning-box'>
+        <h3>⚠️ Important Notes</h3>
+        
+        - High-volume reagents are automatically prioritized for 270mL locations
+        - The system optimizes for maximum days of operation
+        - Configuration considers both volume requirements and daily usage patterns
+        - Total reagents must not exceed 16 locations
+        </div>
+        """, unsafe_allow_html=True)
+
     # Add version tracking
     st.sidebar.markdown("""
     <div style='position: fixed; bottom: 0; left: 0; width: 100%; background-color: #f0f2f6; padding: 8px; text-align: center; font-size: 12px;'>
