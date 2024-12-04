@@ -142,7 +142,6 @@ def display_results(config, selected_experiments, customer_info):
         fig = create_tray_visualization(config, customer_info)
         st.plotly_chart(fig, use_container_width=True)
         
-        # Add download button for the plot
         if st.button("Download Configuration Plot"):
             fig.write_image("tray_configuration.png")
             st.success("Plot downloaded as 'tray_configuration.png'")
@@ -153,30 +152,39 @@ def display_results(config, selected_experiments, customer_info):
         # Key metrics in expander
         with st.expander("📊 Key Metrics", expanded=True):
             days_operation = config["overall_days_of_operation"]
-            total_tests = sum(result["total_tests"] for result in config["results"].values())
+            
+            # Calculate total tests possible within days of operation
+            total_tests = sum(
+                min(result["total_tests"], 
+                    result["daily_count"] * days_operation)
+                for result in config["results"].values()
+            )
             
             col1_metric, col2_metric = st.columns(2)
             with col1_metric:
                 st.metric("Days of Operation", f"{days_operation:.1f} days")
             with col2_metric:
-                st.metric("Total Tests Possible", total_tests)
+                st.metric("Total Tests Possible", f"{int(total_tests)}")
 
-        # Results table
+        # Results table with adjusted total tests
         results_df = pd.DataFrame([
             {
                 "Experiment": f"{result['name']} (#{exp_num})",
                 "Daily Tests": result['daily_count'],
-                "Total Tests": result['total_tests'],
+                "Total Tests Possible": min(
+                    result['total_tests'],
+                    int(result['daily_count'] * days_operation)
+                ),
                 "Days of Operation": result['days_of_operation']
             }
             for exp_num, result in config["results"].items()
         ])
         st.dataframe(results_df, use_container_width=True)
 
-        # Download results as CSV
         if st.button("Download Results as CSV"):
             results_df.to_csv("tray_configuration_results.csv", index=False)
             st.success("Results downloaded as 'tray_configuration_results.csv'")
+
 
     # Detailed Results in Expandable Sections
     st.subheader("Detailed Results")
