@@ -39,6 +39,76 @@ class ReagentOptimizer:
 
         self.MAX_LOCATIONS = 16
 
+    def optimize_tray_configuration(self, selected_experiments, daily_counts):
+        # Validate experiments and counts
+        for exp in selected_experiments:
+            if exp not in self.experiment_data:
+                raise ValueError(f"Invalid experiment number: {exp}")
+            if exp not in daily_counts or daily_counts[exp] <= 0:
+                raise ValueError(f"Invalid daily count for experiment {exp}")
+
+        # Calculate weighted experiment order based on daily counts
+        weighted_experiments = [(exp, daily_counts[exp]) for exp in selected_experiments]
+        total_reagents = sum(len(self.experiment_data[exp]["reagents"]) for exp, _ in weighted_experiments)
+        
+        if total_reagents > self.MAX_LOCATIONS:
+            details = [f"{self.experiment_data[exp]['name']}: {len(self.experiment_data[exp]['reagents'])} reagents" 
+                      for exp, _ in weighted_experiments]
+            raise ValueError(
+                f"Total reagents needed ({total_reagents}) exceeds available locations ({self.MAX_LOCATIONS}).\n"
+                f"Experiment requirements:\n" + "\n".join(details)
+            )
+
+        # Initialize configuration
+        config = {
+            "tray_locations": [None] * self.MAX_LOCATIONS,
+            "results": {},
+            "available_locations": set(range(self.MAX_LOCATIONS)),
+            "daily_counts": daily_counts
+        }
+
+        # Sort experiments by complexity, volume requirements, and daily count
+        sorted_experiments = sorted(
+            selected_experiments,
+            key=lambda x: (
+                len(self.experiment_data[x]["reagents"]),
+                max(r["vol"] for r in self.experiment_data[x]["reagents"]),
+                -daily_counts[x],  # Prioritize experiments with higher daily counts
+                -min(r["vol"] for r in self.experiment_data[x]["reagents"])
+            ),
+            reverse=True
+        )
+
+        # Place primary sets
+        for exp in sorted_experiments:
+            self._place_primary_set(exp, config)
+
+        # Optimize additional sets based on daily counts
+        self._optimize_additional_sets(sorted_experiments, config)
+
+        # Calculate days of operation
+        self._calculate_days_of_operation(config)
+
+        return config
+
+    def _calculate_days_of_operation(self, config):
+        for exp_num, result in config["results"].items():
+            daily_count = config["daily_counts"][exp_num]
+            total_tests = result["total_tests"]
+            days_of_operation = total_tests / daily_count
+            result["daily_count"] = daily_count
+            result["days_of_operation"] = round(days_of_operation, 1)
+
+        # Calculate overall days of operation
+        min_days = float('inf')
+        for result in config["results"].values():
+            days = result["days_of_operation"]
+            if days < min_days:
+                min_days = days
+        
+        config["overall_days_of_operation"] = round(min_days, 1)
+
+
     def calculate_tests(self, volume_ul, capacity_ml):
         return int((capacity_ml * 1000) / volume_ul)
 
