@@ -121,7 +121,7 @@ class ReagentOptimizer:
         if not all(code in reagent_tests for code in required_reagents):
             return 0
             
-        return min(reagent_tests.values())
+        return (reagent_tests.values())
 
     def optimize_tray_configuration(self, selected_experiments, daily_counts):
         """Optimize tray configuration with enhanced two-phase approach"""
