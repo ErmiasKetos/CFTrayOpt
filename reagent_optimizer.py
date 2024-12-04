@@ -75,7 +75,7 @@ class ReagentOptimizer:
     
             return best_locations, best_tests
     
-        def _calculate_experiment_tests(self, tray_locations, exp_num):
+    def _calculate_experiment_tests(self, tray_locations, exp_num):
             """Calculate total tests possible for an experiment"""
             reagent_tests = defaultdict(int)
             exp_data = self.experiment_data[exp_num]
@@ -92,7 +92,7 @@ class ReagentOptimizer:
                 
             return min(reagent_tests.values())
     
-        def optimize_tray_configuration(self, selected_experiments, daily_counts):
+    def optimize_tray_configuration(self, selected_experiments, daily_counts):
             """Optimize tray configuration with two-phase approach"""
             # Validate inputs
             for exp in selected_experiments:
@@ -167,7 +167,7 @@ class ReagentOptimizer:
             self._calculate_final_results(config)
             return config
     
-        def _place_reagent_set(self, config, exp_num, locations):
+    def _place_reagent_set(self, config, exp_num, locations):
             """Place a set of reagents in the specified locations"""
             exp_data = self.experiment_data[exp_num]
             reagents = sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True)
@@ -192,7 +192,7 @@ class ReagentOptimizer:
                         "days_of_operation": 0
                     }
     
-        def _calculate_final_results(self, config):
+    def _calculate_final_results(self, config):
             """Calculate final results for all experiments"""
             for exp_num in config["results"].keys():
                 total_tests = self._calculate_experiment_tests(config["tray_locations"], exp_num)
