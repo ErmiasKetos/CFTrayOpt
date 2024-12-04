@@ -50,14 +50,15 @@ class ReagentOptimizer:
         """Get the capacity of a location in mL"""
         return 270 if location < 4 else 140
 
+   
     def _evaluate_location_set(self, exp_num, locations, reagents):
-        """Evaluate how many tests a set of locations can provide for given reagents"""
-        tests_possible = []
+        """Evaluate how many tests a set of locations can provide"""
+        min_tests = float('inf')
         for reagent, loc in zip(reagents, locations):
             capacity = self.get_location_capacity(loc)
             tests = self.calculate_tests(reagent["vol"], capacity)
-            tests_possible.append(tests)
-        return min(tests_possible)
+            min_tests = min(min_tests, tests)
+        return min_tests * (270 if any(loc < 4 for loc in locations) else 1)  
 
     def _find_best_locations_for_experiment(self, exp_num, available_locations, daily_count):
         """Find optimal locations for an experiment with improved location selection"""
@@ -126,7 +127,7 @@ class ReagentOptimizer:
             daily_count = daily_counts[exp]
             
             # Calculate priority score
-            priority_score = (daily_count * max_vol * num_reagents)
+            priority_score = (daily_count * max_vol)
             
             experiment_metrics.append({
                 'exp_num': exp,
@@ -192,9 +193,12 @@ class ReagentOptimizer:
                     improvement = new_days - current_days
 
                     # Prioritize improvements that help balance the configuration
-                    if current_days <= current_min_days and improvement > max_improvement:
-                        max_improvement = improvement
-                        best_addition = (exp, best_locations)
+                    
+                    if current_days <= current_min_days:  # Remove the additional check
+                        improvement = new_days - current_days
+                        if improvement > max_improvement:
+                            max_improvement = improvement
+                            best_addition = (exp, best_locations)
 
             if best_addition:
                 exp, locations = best_addition
