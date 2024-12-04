@@ -213,6 +213,7 @@ def reset_app():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
 
+
 def main():
     st.title("🧪 Reagent Tray Configurator Pro")
     
@@ -285,12 +286,21 @@ def main():
     if manual_input:
         selected_experiments = [int(num.strip()) for num in manual_input.split(',') if num.strip()]
 
-    # Daily Count Input
+    # Show current locations status
     if selected_experiments:
+        total_locations_needed = sum(len(optimizer.experiment_data[exp]["reagents"]) 
+                                   for exp in selected_experiments)
+        st.sidebar.markdown(f"""
+        <div style='padding: 10px; background-color: #e1f5fe; border-radius: 5px;'>
+            <strong>Initial Locations Required:</strong> {total_locations_needed}
+            <br><small>Additional sets will be added to optimize days of operation</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Daily Count Input
         st.sidebar.markdown("### 2️⃣ Enter Daily Test Counts")
         daily_counts = {}
         
-        # Show daily count inputs in a more compact format
         for exp_id in selected_experiments:
             exp_name = next(exp['name'] for exp in experiments if exp['id'] == exp_id)
             count = st.sidebar.number_input(
@@ -319,6 +329,16 @@ def main():
                         config = optimizer.optimize_tray_configuration(selected_experiments, daily_counts)
                     st.session_state.config = config
                     st.session_state.selected_experiments = selected_experiments
+                    
+                    # Show optimization summary
+                    used_locations = len([loc for loc in config["tray_locations"] if loc is not None])
+                    st.success(f"""
+                    Configuration optimized successfully:
+                    - All {used_locations} locations utilized
+                    - Optimized for maximum days of operation
+                    - Multiple sets added where beneficial
+                    """)
+                    
                 except ValueError as e:
                     st.error(str(e))
                 except Exception as e:
@@ -331,6 +351,7 @@ def main():
     with st.sidebar.expander("ℹ️ Help & Information"):
         st.markdown("""
         ### How to use
+
         1. **Customer Information**
            - Enter customer name
            - Specify unit location
@@ -353,48 +374,7 @@ def main():
            - View the tray visualization
            - Check detailed metrics and summaries
            - Download configuration plot and results
-           
-
         """)
-
-    # Footer
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("""
-    <div style='text-align: center; color: #666;'>
-    <small>Version 2.0 | Last Updated: 2024-03</small>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Main page information (when no configuration is shown)
-    if st.session_state.config is None:
-        st.markdown("""
-        <div class='header-box'>
-        <h2>Welcome to the Reagent Tray Configurator Pro! 👋</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class='info-box'>
-        <h3>🎯 Key Features</h3>
-        
-        - Optimized tray configuration based on daily usage
-        - Smart allocation of high-capacity locations
-        - Detailed analysis of operational duration
-        - Downloadable reports and visualizations
-        - Easy experiment selection by category
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class='warning-box'>
-        <h3>⚠️ Important Notes</h3>
-        
-        - High-volume reagents are automatically prioritized for 270mL locations
-        - The system optimizes for maximum days of operation
-        - Configuration considers both volume requirements and daily usage patterns
-        - Total reagents must not exceed 16 locations
-        </div>
-        """, unsafe_allow_html=True)
 
     # Add version tracking
     st.sidebar.markdown("""
