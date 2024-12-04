@@ -346,16 +346,7 @@ def main():
            - Check detailed metrics and summaries
            - Download configuration plot and results
            
-        ### Color Coding
-        The tray visualization uses different colors to indicate reagent types:
-        - 🔵 Blue: Iron, Chromium (HR), Nitrite-N, Nickel
-        - 🟣 Violet: Boron, Silica, Sulfate, Potassium
-        - 🟢 Green: Chlorine-related tests
-        - 🟡 Yellow: Copper (HR)
-        - ⚪ White: Alkalinity tests
-        - 🟤 Gray: Basic metal tests
-        - 🔴 Red: Ammonia tests
-        - 🟠 Orange: Other tests
+
         """)
 
     # Footer
