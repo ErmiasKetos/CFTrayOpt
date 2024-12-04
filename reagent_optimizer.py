@@ -50,7 +50,7 @@ class ReagentOptimizer:
         """Get the capacity of a location in mL"""
         return 270 if location < 4 else 140
 
-
+    
     def _find_best_locations_for_experiment(self, exp_num, available_locations, daily_count):
         """Find optimal locations for an experiment considering high and low capacity combinations"""
         exp_data = self.experiment_data[exp_num]
@@ -59,12 +59,32 @@ class ReagentOptimizer:
         
         best_locations = None
         best_tests = 0
-
+    
         # Split available locations into high and low capacity
         high_cap_locs = [loc for loc in available_locations if loc < 4]
         low_cap_locs = [loc for loc in available_locations if loc >= 4]
         
-        # Try different combinations of high and low capacity locations
+        # For high-volume reagents, try using high-capacity locations first
+        high_volume_reagents = [r for r in reagents if r["vol"] >= 1000]
+        if high_volume_reagents and len(high_cap_locs) >= len(high_volume_reagents):
+            remaining_reagents = [r for r in reagents if r["vol"] < 1000]
+            high_locs = high_cap_locs[:len(high_volume_reagents)]
+            
+            # Try combinations of remaining locations for other reagents
+            for low_locs in combinations(low_cap_locs, len(remaining_reagents)):
+                test_locations = high_locs + list(low_locs)
+                min_tests = float('inf')
+                
+                for reagent, loc in zip(reagents, test_locations):
+                    capacity = self.get_location_capacity(loc)
+                    tests = self.calculate_tests(reagent["vol"], capacity)
+                    min_tests = min(min_tests, tests)
+                
+                if min_tests > best_tests:
+                    best_tests = min_tests
+                    best_locations = test_locations
+        
+        # Try all other possible combinations
         for high_count in range(min(len(high_cap_locs) + 1, num_reagents + 1)):
             low_count = num_reagents - high_count
             if low_count > len(low_cap_locs):
@@ -73,19 +93,17 @@ class ReagentOptimizer:
             for high_locs in combinations(high_cap_locs, high_count):
                 for low_locs in combinations(low_cap_locs, low_count):
                     test_locations = list(high_locs) + list(low_locs)
+                    min_tests = float('inf')
                     
-                    # Calculate tests possible with this combination
-                    tests_possible = []
                     for reagent, loc in zip(reagents, test_locations):
                         capacity = self.get_location_capacity(loc)
                         tests = self.calculate_tests(reagent["vol"], capacity)
-                        tests_possible.append(tests)
+                        min_tests = min(min_tests, tests)
                     
-                    min_tests = min(tests_possible)
                     if min_tests > best_tests:
                         best_tests = min_tests
                         best_locations = test_locations
-
+    
         return best_locations, best_tests
 
     def _calculate_experiment_tests(self, tray_locations, exp_num):
