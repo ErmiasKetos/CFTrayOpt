@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from reagent_optimizer import ReagentOptimizer
+from datetime import datetime
 
 # Set page config
 st.set_page_config(
-    page_title="Reagent Tray Configurator",
+    page_title="Reagent Tray Configurator Pro",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -36,6 +37,25 @@ st.markdown("""
     .css-1d391kg {
         padding-top: 3rem;
     }
+    .info-box {
+        background-color: #e1f5fe;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .warning-box {
+        background-color: #fff3e0;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .header-box {
+        background-color: #f1f8e9;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,11 +73,16 @@ def get_reagent_color(reagent_code):
     for color, reagents in color_map.items():
         if any(reagent_code.startswith(r) for r in reagents):
             return color
-    return 'lightgray'  # Default color if not found
+    return 'lightgray'
 
-def create_tray_visualization(config):
+def create_tray_visualization(config, customer_info):
     locations = config["tray_locations"]
     fig = go.Figure()
+
+    # Create the title with customer information
+    title = (f"Reagent Tray Configuration<br>"
+             f"Customer: {customer_info['name']} | Unit: {customer_info['unit']} | "
+             f"Date: {customer_info['date'].strftime('%Y-%m-%d')}")
 
     for i, loc in enumerate(locations):
         row = i // 4
@@ -78,11 +103,10 @@ def create_tray_visualization(config):
             hoverinfo="text"
         ))
 
-        # Add text annotation
         fig.add_annotation(
             x=(col + col + 1) / 2,
             y=(row + row + 1) / 2,
-           text=f"<b>LOC-{i+1}</b><br>{'<b>' + loc['reagent_code'] if loc else 'Empty</b>'}<br>Tests: {loc['tests_possible'] if loc else 'N/A'}<br>Exp: #{loc['experiment'] if loc else 'N/A'}",
+            text=f"<b>LOC-{i+1}</b><br>{'<b>' + loc['reagent_code'] if loc else 'Empty</b>'}<br>Tests: {loc['tests_possible'] if loc else 'N/A'}<br>Exp: #{loc['experiment'] if loc else 'N/A'}",
             showarrow=False,
             font=dict(color="black", size=14),
             align="center",
@@ -91,52 +115,84 @@ def create_tray_visualization(config):
         )
 
     fig.update_layout(
-        title="Tray Configuration",
+        title=dict(
+            text=title,
+            x=0.5,
+            y=0.95,
+            xanchor="center",
+            yanchor="top",
+            font=dict(size=16)
+        ),
         showlegend=False,
         height=600,
         width=800,
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=20, r=20, t=40, b=20)
+        margin=dict(l=20, r=20, t=80, b=20)
     )
 
     return fig
 
-
-def display_results(config, selected_experiments):
+def display_results(config, selected_experiments, customer_info):
     col1, col2 = st.columns([3, 2])
 
     with col1:
         st.subheader("Tray Configuration")
-        fig = create_tray_visualization(config)
+        fig = create_tray_visualization(config, customer_info)
         st.plotly_chart(fig, use_container_width=True)
+        
+        # Add download button for the plot
+        if st.button("Download Configuration Plot"):
+            fig.write_image("tray_configuration.png")
+            st.success("Plot downloaded as 'tray_configuration.png'")
 
     with col2:
         st.subheader("Results Summary")
-        st.metric("Days of Operation", config["overall_days_of_operation"])
         
+        # Key metrics in expander
+        with st.expander("📊 Key Metrics", expanded=True):
+            days_operation = config["overall_days_of_operation"]
+            total_tests = sum(result["total_tests"] for result in config["results"].values())
+            
+            col1_metric, col2_metric = st.columns(2)
+            with col1_metric:
+                st.metric("Days of Operation", f"{days_operation:.1f} days")
+            with col2_metric:
+                st.metric("Total Tests Possible", total_tests)
+
+        # Results table
         results_df = pd.DataFrame([
             {
                 "Experiment": f"{result['name']} (#{exp_num})",
-                "Total Tests": result['total_tests'],
                 "Daily Tests": result['daily_count'],
+                "Total Tests": result['total_tests'],
                 "Days of Operation": result['days_of_operation']
             }
             for exp_num, result in config["results"].items()
         ])
         st.dataframe(results_df, use_container_width=True)
 
+        # Download results as CSV
+        if st.button("Download Results as CSV"):
+            results_df.to_csv("tray_configuration_results.csv", index=False)
+            st.success("Results downloaded as 'tray_configuration_results.csv'")
+
+    # Detailed Results in Expandable Sections
     st.subheader("Detailed Results")
     for exp_num, result in config["results"].items():
-        with st.expander(f"{result['name']} (#{exp_num}) - {result['total_tests']} total tests"):
+        with st.expander(f"📋 {result['name']} (#{exp_num}) - {result['total_tests']} total tests"):
+            st.markdown(f"**Daily Usage:** {result['daily_count']} tests")
+            st.markdown(f"**Days of Operation:** {result['days_of_operation']} days")
+            
             for i, set_info in enumerate(result["sets"]):
                 st.markdown(f"**{'Primary' if i == 0 else 'Additional'} Set {i+1}:**")
                 set_df = pd.DataFrame([
                     {
                         "Reagent": placement["reagent_code"],
                         "Location": f"LOC-{placement['location'] + 1}",
-                        "Tests Possible": placement["tests"]
+                        "Tests Possible": placement["tests"],
+                        "Volume per Test (µL)": placement["volume"]
                     }
                     for placement in set_info["placements"]
                 ])
@@ -147,13 +203,10 @@ def display_results(config, selected_experiments):
 def reset_app():
     """Clears all session state variables to reset the app."""
     for key in list(st.session_state.keys()):
-        if key.startswith('exp_'):
-            st.session_state[key] = False
-        else:
-            del st.session_state[key]
+        del st.session_state[key]
 
 def main():
-    st.title("🧪 Reagent Tray Configurator")
+    st.title("🧪 Reagent Tray Configurator Pro")
     
     # Initialize session state
     if 'config' not in st.session_state:
@@ -163,20 +216,55 @@ def main():
     if 'daily_counts' not in st.session_state:
         st.session_state.daily_counts = {}
 
-    optimizer = ReagentOptimizer()
-    experiments = optimizer.get_available_experiments()
+    # Customer Information Section
+    st.sidebar.markdown("### 📝 Customer Information")
+    customer_name = st.sidebar.text_input("Customer Name", key="customer_name")
+    unit_location = st.sidebar.text_input("Unit Location", key="unit_location")
+    config_date = st.sidebar.date_input("Configuration Date", datetime.now())
+
+    customer_info = {
+        "name": customer_name,
+        "unit": unit_location,
+        "date": config_date
+    }
 
     # Reset Button
-    if st.sidebar.button("Reset All", key="reset_button"):
+    if st.sidebar.button("🔄 Reset All", key="reset_button"):
         reset_app()
         st.rerun()
 
-    # Experiment Selection
-    st.sidebar.header("1. Select Experiments")
+    optimizer = ReagentOptimizer()
+    experiments = optimizer.get_available_experiments()
+
+    # Experiment Selection Section
+    st.sidebar.markdown("### 1️⃣ Select Experiments")
+    
+    # Group experiments by type
+    exp_types = {
+        "LR": [exp for exp in experiments if "(LR)" in exp["name"]],
+        "HR": [exp for exp in experiments if "(HR)" in exp["name"]],
+        "Other": [exp for exp in experiments if "(LR)" not in exp["name"] and "(HR)" not in exp["name"]]
+    }
+
     selected_experiments = []
-    for exp in experiments:
-        if st.sidebar.checkbox(f"{exp['id']}: {exp['name']}", key=f"exp_{exp['id']}"):
-            selected_experiments.append(exp['id'])
+    
+    # Create tabs for experiment types
+    tab_lr, tab_hr, tab_other = st.sidebar.tabs(["Low Range", "High Range", "Other"])
+    
+    with tab_lr:
+        for exp in exp_types["LR"]:
+            if st.checkbox(f"{exp['id']}: {exp['name']}", key=f"exp_{exp['id']}"):
+                selected_experiments.append(exp['id'])
+    
+    with tab_hr:
+        for exp in exp_types["HR"]:
+            if st.checkbox(f"{exp['id']}: {exp['name']}", key=f"exp_{exp['id']}_hr"):
+                selected_experiments.append(exp['id'])
+    
+    with tab_other:
+        for exp in exp_types["Other"]:
+            if st.checkbox(f"{exp['id']}: {exp['name']}", key=f"exp_{exp['id']}_other"):
+                selected_experiments.append(exp['id'])
 
     # Manual Input Option
     st.sidebar.markdown("---")
@@ -191,13 +279,14 @@ def main():
 
     # Daily Count Input
     if selected_experiments:
-        st.sidebar.header("2. Enter Daily Test Counts")
+        st.sidebar.markdown("### 2️⃣ Enter Daily Test Counts")
         daily_counts = {}
         
+        # Show daily count inputs in a more compact format
         for exp_id in selected_experiments:
             exp_name = next(exp['name'] for exp in experiments if exp['id'] == exp_id)
             count = st.sidebar.number_input(
-                f"Daily tests for #{exp_id}: {exp_name}",
+                f"#{exp_id}: {exp_name}",
                 min_value=1,
                 value=st.session_state.daily_counts.get(exp_id, 1),
                 key=f"daily_count_{exp_id}"
@@ -205,32 +294,115 @@ def main():
             daily_counts[exp_id] = count
             st.session_state.daily_counts = daily_counts
 
-        optimize_button = st.sidebar.button("3. Optimize Configuration", key="optimize_button")
+        # Information about current selection
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 📊 Current Selection")
+        st.sidebar.markdown(f"**Total experiments:** {len(selected_experiments)}")
+        st.sidebar.markdown(f"**Total daily tests:** {sum(daily_counts.values())}")
+
+        optimize_button = st.sidebar.button("3️⃣ Optimize Configuration", key="optimize_button")
 
         if optimize_button:
-            try:
-                with st.spinner("Optimizing tray configuration..."):
-                    config = optimizer.optimize_tray_configuration(selected_experiments, daily_counts)
-                st.session_state.config = config
-                st.session_state.selected_experiments = selected_experiments
-            except ValueError as e:
-                st.error(str(e))
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+            if not customer_name or not unit_location:
+                st.error("Please fill in Customer Name and Unit Location before optimizing.")
+            else:
+                try:
+                    with st.spinner("Optimizing tray configuration..."):
+                        config = optimizer.optimize_tray_configuration(selected_experiments, daily_counts)
+                    st.session_state.config = config
+                    st.session_state.selected_experiments = selected_experiments
+                except ValueError as e:
+                    st.error(str(e))
+                except Exception as e:
+                    st.error(f"An error occurred: {str(e)}")
 
     if st.session_state.config is not None:
-        display_results(st.session_state.config, st.session_state.selected_experiments)
+        display_results(st.session_state.config, st.session_state.selected_experiments, customer_info)
 
+    # Help and Information
+    with st.sidebar.expander("ℹ️ Help & Information"):
+        st.markdown("""
+        ### How to use
+        1. **Customer Information**
+           - Enter customer name
+           - Specify unit location
+           - Set configuration date
+
+        2. **Select Experiments**
+           - Choose from Low Range, High Range, or Other tabs
+           - Or enter experiment numbers manually
+           - View experiments by category
+
+        3. **Daily Test Counts**
+           - Enter the number of daily tests needed for each selected experiment
+           - Numbers must be greater than 0
+
+        4. **Optimization**
+           - Click 'Optimize Configuration' to generate the optimal tray layout
+           - System will maximize days of operation based on daily usage
+
+        5. **Results**
+           - View the tray visualization
+           - Check detailed metrics and summaries
+           - Download configuration plot and results
+           
+        ### Color Coding
+        The tray visualization uses different colors to indicate reagent types:
+        - 🔵 Blue: Iron, Chromium (HR), Nitrite-N, Nickel
+        - 🟣 Violet: Boron, Silica, Sulfate, Potassium
+        - 🟢 Green: Chlorine-related tests
+        - 🟡 Yellow: Copper (HR)
+        - ⚪ White: Alkalinity tests
+        - 🟤 Gray: Basic metal tests
+        - 🔴 Red: Ammonia tests
+        - 🟠 Orange: Other tests
+        """)
+
+    # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### How to use")
     st.sidebar.markdown("""
-    1. Select experiments using checkboxes or enter numbers manually
-    2. Enter the number of daily tests needed for each experiment
-    3. Click 'Optimize Configuration'
-    4. View the tray visualization and results summary
-    5. Expand detailed results for each experiment
-    6. Click 'Reset All' to start fresh
-    """)
+    <div style='text-align: center; color: #666;'>
+    <small>Version 2.0 | Last Updated: 2024-03</small>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Main page information (when no configuration is shown)
+    if st.session_state.config is None:
+        st.markdown("""
+        <div class='header-box'>
+        <h2>Welcome to the Reagent Tray Configurator Pro! 👋</h2>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class='info-box'>
+        <h3>🎯 Key Features</h3>
+        
+        - Optimized tray configuration based on daily usage
+        - Smart allocation of high-capacity locations
+        - Detailed analysis of operational duration
+        - Downloadable reports and visualizations
+        - Easy experiment selection by category
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class='warning-box'>
+        <h3>⚠️ Important Notes</h3>
+        
+        - High-volume reagents are automatically prioritized for 270mL locations
+        - The system optimizes for maximum days of operation
+        - Configuration considers both volume requirements and daily usage patterns
+        - Total reagents must not exceed 16 locations
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Add version tracking
+    st.sidebar.markdown("""
+    <div style='position: fixed; bottom: 0; left: 0; width: 100%; background-color: #f0f2f6; padding: 8px; text-align: center; font-size: 12px;'>
+    Reagent Tray Configurator Pro v2.0
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
