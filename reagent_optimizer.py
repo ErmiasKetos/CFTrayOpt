@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional, Union
+from itertools import combinations
 import json
 
 class ReagentOptimizer:
@@ -51,184 +52,39 @@ class ReagentOptimizer:
 
 
     def _find_best_locations_for_experiment(self, exp_num, available_locations, daily_count):
-            """Find the best locations for an experiment's reagents"""
-            exp_data = self.experiment_data[exp_num]
-            reagents = sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True)
-            num_reagents = len(reagents)
-    
-            best_locations = None
-            best_tests = 0
-    
-            # Try all possible combinations of available locations
-            for i in range(len(available_locations) - num_reagents + 1):
-                test_locations = available_locations[i:i + num_reagents]
-                min_tests = float('inf')
-    
-                for reagent, loc in zip(reagents, test_locations):
-                    capacity = self.get_location_capacity(loc)
-                    tests = self.calculate_tests(reagent["vol"], capacity)
-                    min_tests = min(min_tests, tests)
-    
-                if min_tests > best_tests:
-                    best_tests = min_tests
-                    best_locations = test_locations
-    
-            return best_locations, best_tests
-    
-    def _calculate_experiment_tests(self, tray_locations, exp_num):
-            """Calculate total tests possible for an experiment"""
-            reagent_tests = defaultdict(int)
-            exp_data = self.experiment_data[exp_num]
-            
-            # Sum up tests possible for each reagent
-            for loc in tray_locations:
-                if loc and loc["experiment"] == exp_num:
-                    reagent_tests[loc["reagent_code"]] += loc["tests_possible"]
-            
-            # Ensure we have all required reagents
-            required_reagents = {r["code"] for r in exp_data["reagents"]}
-            if not all(code in reagent_tests for code in required_reagents):
-                return 0
-                
-            return min(reagent_tests.values())
-    
-    def optimize_tray_configuration(self, selected_experiments, daily_counts):
-            """Optimize tray configuration with two-phase approach"""
-            # Validate inputs
-            for exp in selected_experiments:
-                if exp not in self.experiment_data:
-                    raise ValueError(f"Invalid experiment number: {exp}")
-                if exp not in daily_counts or daily_counts[exp] <= 0:
-                    raise ValueError(f"Invalid daily count for experiment {exp}")
-    
-            # Initialize configuration
-            config = {
-                "tray_locations": [None] * self.MAX_LOCATIONS,
-                "results": {},
-                "daily_counts": daily_counts,
-                "available_locations": list(range(self.MAX_LOCATIONS))
-            }
-    
-            # Phase 1: Initial placement ensuring each experiment gets optimal locations
-            for exp in selected_experiments:
-                num_reagents = len(self.experiment_data[exp]["reagents"])
-                if num_reagents > len(config["available_locations"]):
-                    raise ValueError(f"Not enough locations available for experiment {exp}")
-    
-                best_locations, best_tests = self._find_best_locations_for_experiment(
-                    exp, config["available_locations"], daily_counts[exp]
-                )
-    
-                if best_locations:
-                    self._place_reagent_set(config, exp, best_locations)
-                    config["available_locations"] = [
-                        loc for loc in config["available_locations"] 
-                        if loc not in best_locations
-                    ]
-    
-            # Phase 2: Fill remaining locations to maximize overall days
-            while config["available_locations"]:
-                best_addition = None
-                best_days_improvement = 0
-    
-                for exp in selected_experiments:
-                    num_reagents = len(self.experiment_data[exp]["reagents"])
-                    if num_reagents > len(config["available_locations"]):
-                        continue
-    
-                    # Calculate current days for this experiment
-                    current_tests = self._calculate_experiment_tests(config["tray_locations"], exp)
-                    current_days = current_tests / daily_counts[exp]
-    
-                    # Try adding another set
-                    best_locations, additional_tests = self._find_best_locations_for_experiment(
-                        exp, config["available_locations"], daily_counts[exp]
-                    )
-    
-                    if best_locations:
-                        new_days = (current_tests + additional_tests) / daily_counts[exp]
-                        days_improvement = new_days - current_days
-    
-                        if days_improvement > best_days_improvement:
-                            best_days_improvement = days_improvement
-                            best_addition = (exp, best_locations)
-    
-                if best_addition:
-                    exp, locations = best_addition
-                    self._place_reagent_set(config, exp, locations)
-                    config["available_locations"] = [
-                        loc for loc in config["available_locations"] 
-                        if loc not in locations
-                    ]
-                else:
-                    break
-    
-            # Calculate final results
-            self._calculate_final_results(config)
-            return config
-    
-    def _place_reagent_set(self, config, exp_num, locations):
-            """Place a set of reagents in the specified locations"""
-            exp_data = self.experiment_data[exp_num]
-            reagents = sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True)
-    
-            for loc, reagent in zip(locations, reagents):
-                capacity = self.get_location_capacity(loc)
-                tests = self.calculate_tests(reagent["vol"], capacity)
-                
-                config["tray_locations"][loc] = {
-                    "reagent_code": reagent["code"],
-                    "experiment": exp_num,
-                    "tests_possible": tests,
-                    "volume_per_test": reagent["vol"],
-                    "capacity": capacity
-                }
-    
-                if exp_num not in config["results"]:
-                    config["results"][exp_num] = {
-                        "name": exp_data["name"],
-                        "total_tests": 0,
-                        "daily_count": config["daily_counts"][exp_num],
-                        "days_of_operation": 0
-                    }
-    
-    def _calculate_final_results(self, config):
-            """Calculate final results for all experiments"""
-            for exp_num in config["results"].keys():
-                total_tests = self._calculate_experiment_tests(config["tray_locations"], exp_num)
-                days = total_tests / config["daily_counts"][exp_num]
-                config["results"][exp_num].update({
-                    "total_tests": total_tests,
-                    "days_of_operation": days
-                })
-    
-            config["overall_days_of_operation"] = min(
-                result["days_of_operation"] 
-                for result in config["results"].values()
-            )
-    
-    def _find_best_locations_for_experiment(self, exp_num, available_locations, daily_count):
-        """Find the best locations for an experiment's reagents"""
+        """Find optimal locations for an experiment considering high and low capacity combinations"""
         exp_data = self.experiment_data[exp_num]
         reagents = sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True)
         num_reagents = len(reagents)
-
+        
         best_locations = None
         best_tests = 0
 
-        # Try all possible combinations of available locations
-        for i in range(len(available_locations) - num_reagents + 1):
-            test_locations = available_locations[i:i + num_reagents]
-            min_tests = float('inf')
-
-            for reagent, loc in zip(reagents, test_locations):
-                capacity = self.get_location_capacity(loc)
-                tests = self.calculate_tests(reagent["vol"], capacity)
-                min_tests = min(min_tests, tests)
-
-            if min_tests > best_tests:
-                best_tests = min_tests
-                best_locations = test_locations
+        # Split available locations into high and low capacity
+        high_cap_locs = [loc for loc in available_locations if loc < 4]
+        low_cap_locs = [loc for loc in available_locations if loc >= 4]
+        
+        # Try different combinations of high and low capacity locations
+        for high_count in range(min(len(high_cap_locs) + 1, num_reagents + 1)):
+            low_count = num_reagents - high_count
+            if low_count > len(low_cap_locs):
+                continue
+                
+            for high_locs in combinations(high_cap_locs, high_count):
+                for low_locs in combinations(low_cap_locs, low_count):
+                    test_locations = list(high_locs) + list(low_locs)
+                    
+                    # Calculate tests possible with this combination
+                    tests_possible = []
+                    for reagent, loc in zip(reagents, test_locations):
+                        capacity = self.get_location_capacity(loc)
+                        tests = self.calculate_tests(reagent["vol"], capacity)
+                        tests_possible.append(tests)
+                    
+                    min_tests = min(tests_possible)
+                    if min_tests > best_tests:
+                        best_tests = min_tests
+                        best_locations = test_locations
 
         return best_locations, best_tests
 
@@ -250,7 +106,7 @@ class ReagentOptimizer:
         return min(reagent_tests.values())
 
     def optimize_tray_configuration(self, selected_experiments, daily_counts):
-        """Optimize tray configuration with two-phase approach"""
+        """Optimize tray configuration with enhanced two-phase approach"""
         # Validate inputs
         for exp in selected_experiments:
             if exp not in self.experiment_data:
@@ -266,13 +122,23 @@ class ReagentOptimizer:
             "available_locations": list(range(self.MAX_LOCATIONS))
         }
 
+        # Sort experiments by priority (daily count and volume)
+        sorted_experiments = sorted(
+            selected_experiments,
+            key=lambda x: (
+                daily_counts[x] * max(r["vol"] for r in self.experiment_data[x]["reagents"]),  # Combined priority
+                len(self.experiment_data[x]["reagents"])  # More reagents last
+            ),
+            reverse=True
+        )
+
         # Phase 1: Initial placement ensuring each experiment gets optimal locations
-        for exp in selected_experiments:
+        for exp in sorted_experiments:
             num_reagents = len(self.experiment_data[exp]["reagents"])
             if num_reagents > len(config["available_locations"]):
                 raise ValueError(f"Not enough locations available for experiment {exp}")
 
-            best_locations, best_tests = self._find_best_locations_for_experiment(
+            best_locations, _ = self._find_best_locations_for_experiment(
                 exp, config["available_locations"], daily_counts[exp]
             )
 
@@ -283,31 +149,44 @@ class ReagentOptimizer:
                     if loc not in best_locations
                 ]
 
-        # Phase 2: Fill remaining locations to maximize overall days
+        # Phase 2: Fill remaining locations to maximize days of operation
         while config["available_locations"]:
             best_addition = None
-            best_days_improvement = 0
+            best_improvement = 0
+            current_min_days = float('inf')
 
+            # Find current minimum days
             for exp in selected_experiments:
+                if exp in config["results"]:
+                    tests = self._calculate_experiment_tests(config["tray_locations"], exp)
+                    days = tests / daily_counts[exp]
+                    current_min_days = min(current_min_days, days)
+
+            # Try improving the limiting experiments first
+            for exp in sorted_experiments:
+                if exp not in config["results"]:
+                    continue
+
                 num_reagents = len(self.experiment_data[exp]["reagents"])
                 if num_reagents > len(config["available_locations"]):
                     continue
 
-                # Calculate current days for this experiment
                 current_tests = self._calculate_experiment_tests(config["tray_locations"], exp)
                 current_days = current_tests / daily_counts[exp]
 
-                # Try adding another set
+                if current_days > current_min_days * 1.1:  # Skip if already 10% better than minimum
+                    continue
+
                 best_locations, additional_tests = self._find_best_locations_for_experiment(
                     exp, config["available_locations"], daily_counts[exp]
                 )
 
                 if best_locations:
                     new_days = (current_tests + additional_tests) / daily_counts[exp]
-                    days_improvement = new_days - current_days
+                    improvement = new_days - current_days
 
-                    if days_improvement > best_days_improvement:
-                        best_days_improvement = days_improvement
+                    if improvement > best_improvement:
+                        best_improvement = improvement
                         best_addition = (exp, best_locations)
 
             if best_addition:
@@ -323,6 +202,7 @@ class ReagentOptimizer:
         # Calculate final results
         self._calculate_final_results(config)
         return config
+
 
     def _place_reagent_set(self, config, exp_num, locations):
         """Place a set of reagents in the specified locations"""
@@ -363,6 +243,7 @@ class ReagentOptimizer:
             result["days_of_operation"] 
             for result in config["results"].values()
         )
+
     def get_available_experiments(self):
         """Return list of available experiments"""
         return [{"id": id_, "name": exp["name"]} 
@@ -505,4 +386,3 @@ class ReagentOptimizer:
     def __repr__(self):
         """Detailed string representation of the optimizer"""
         return f"ReagentOptimizer(experiments={len(self.experiment_data)}, max_locations={self.MAX_LOCATIONS})"
-
