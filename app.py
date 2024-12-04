@@ -86,7 +86,8 @@ def create_tray_visualization(config, customer_info):
 
     for i, loc in enumerate(locations):
         row = i // 4
-        col = i % 4
+        # Reverse the column calculation
+        col = 3 - (i % 4)  # This changes the direction from right to left
         color = get_reagent_color(loc['reagent_code']) if loc else 'lightgray'
         opacity = 0.8 if loc else 0.2
 
