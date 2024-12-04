@@ -61,8 +61,9 @@ class ReagentOptimizer:
         total_tests = self._calculate_set_tests(reagents, capacities)
         return total_tests / daily_count if daily_count > 0 else float('inf')
 
+    
     def optimize_tray_configuration(self, selected_experiments, daily_counts):
-        """Optimize tray configuration based purely on maximum tests possible"""
+        """Optimize tray configuration for maximum days of operation"""
         # Validate inputs
         for exp in selected_experiments:
             if exp not in self.experiment_data:
@@ -78,79 +79,65 @@ class ReagentOptimizer:
             "available_locations": list(range(self.MAX_LOCATIONS))
         }
 
-        # Calculate tests possible for each experiment in different location combinations
-        experiment_possibilities = []
+        # First pass: Place at least one set of each selected experiment
         for exp in selected_experiments:
-            exp_data = self.experiment_data[exp]
-            num_reagents = len(exp_data["reagents"])
-            daily_usage = daily_counts[exp]
+            num_reagents = len(self.experiment_data[exp]["reagents"])
+            if len(config["available_locations"]) >= num_reagents:
+                # Find best locations for initial placement
+                locations_to_use = config["available_locations"][:num_reagents]
+                self._place_reagent_set(config, exp, locations_to_use)
+                config["available_locations"] = [
+                    loc for loc in config["available_locations"] 
+                    if loc not in locations_to_use
+                ]
 
-            # Calculate tests possible with 270mL locations
-            high_cap_tests = self._evaluate_reagent_placement(
-                exp, [270] * num_reagents, daily_usage
-            )
-
-            # Calculate tests possible with 140mL locations
-            low_cap_tests = self._evaluate_reagent_placement(
-                exp, [140] * num_reagents, daily_usage
-            )
-
-            experiment_possibilities.append({
-                'exp_num': exp,
-                'num_reagents': num_reagents,
-                'high_cap_days': high_cap_tests,
-                'low_cap_days': low_cap_tests,
-                'daily_usage': daily_usage
-            })
-
-        # Fill locations optimizing for maximum days of operation
+        # Second pass: Fill remaining locations optimally
         while config["available_locations"]:
-            best_option = None
-            best_days = 0
+            best_addition = None
+            best_improvement = 0
 
-            for exp_possibility in experiment_possibilities:
-                exp_num = exp_possibility['exp_num']
-                num_reagents = exp_possibility['num_reagents']
-                
-                # Skip if not enough locations available
-                if len(config["available_locations"]) < num_reagents:
-                    continue
+            for exp in selected_experiments:
+                num_reagents = len(self.experiment_data[exp]["reagents"])
+                if len(config["available_locations"]) >= num_reagents:
+                    # Calculate current days for this experiment
+                    current_days = config["results"][exp]["total_tests"] / daily_counts[exp]
+                    
+                    # Try adding another set
+                    test_locations = config["available_locations"][:num_reagents]
+                    test_config = {
+                        "tray_locations": config["tray_locations"].copy(),
+                        "results": config["results"].copy(),
+                        "daily_counts": daily_counts
+                    }
+                    self._place_reagent_set(test_config, exp, test_locations)
+                    
+                    # Calculate improvement
+                    new_days = test_config["results"][exp]["total_tests"] / daily_counts[exp]
+                    improvement = new_days - current_days
+                    
+                    if improvement > best_improvement:
+                        best_improvement = improvement
+                        best_addition = (exp, test_locations)
 
-                # Try different location combinations
-                available_270 = [loc for loc in config["available_locations"] if loc < 4]
-                available_140 = [loc for loc in config["available_locations"] if loc >= 4]
-
-                # Try using high capacity locations
-                if len(available_270) >= num_reagents:
-                    days = exp_possibility['high_cap_days']
-                    if days > best_days:
-                        best_days = days
-                        best_option = (exp_num, available_270[:num_reagents])
-
-                # Try using low capacity locations
-                if len(available_140) >= num_reagents:
-                    days = exp_possibility['low_cap_days']
-                    if days > best_days:
-                        best_days = days
-                        best_option = (exp_num, available_140[:num_reagents])
-
-                # Try mixed capacity if available
-                if len(available_270) + len(available_140) >= num_reagents:
-                    mixed_locs = (available_270 + available_140)[:num_reagents]
-                    capacities = [self.get_location_capacity(loc) for loc in mixed_locs]
-                    days = self._evaluate_reagent_placement(exp_num, capacities, exp_possibility['daily_usage'])
-                    if days > best_days:
-                        best_days = days
-                        best_option = (exp_num, mixed_locs)
-
-            if best_option:
-                exp_num, locations = best_option
-                self._place_reagent_set(config, exp_num, locations)
+            if best_addition:
+                exp, locations = best_addition
+                self._place_reagent_set(config, exp, locations)
+                config["available_locations"] = [
+                    loc for loc in config["available_locations"] 
+                    if loc not in locations
+                ]
             else:
                 break
 
-        # Calculate final results
-        self._calculate_final_results(config)
+        # Calculate final days of operation
+        min_days = float('inf')
+        for exp_num, result in config["results"].items():
+            days = result["total_tests"] / daily_counts[exp_num]
+            result["days_of_operation"] = days
+            min_days = min(min_days, days)
+
+        config["overall_days_of_operation"] = min_days
+
         return config
 
     def _place_reagent_set(self, config, exp_num, locations):
