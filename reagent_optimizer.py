@@ -50,26 +50,16 @@ class ReagentOptimizer:
         return tests / daily_count if daily_count > 0 else float('inf')
 
     def optimize_tray_configuration(self, selected_experiments, daily_counts):
-        # Validate inputs
+        # Validate basic inputs
         for exp in selected_experiments:
             if exp not in self.experiment_data:
                 raise ValueError(f"Invalid experiment number: {exp}")
             if exp not in daily_counts or daily_counts[exp] <= 0:
                 raise ValueError(f"Invalid daily count for experiment {exp}")
-
-        # Calculate total reagents needed
-        total_reagents = sum(len(self.experiment_data[exp]["reagents"]) for exp in selected_experiments)
+    
+        # Calculate initial reagents needed
+        initial_reagents = sum(len(self.experiment_data[exp]["reagents"]) for exp in selected_experiments)
         
-        # Validate exact number of locations
-        if total_reagents != self.MAX_LOCATIONS:
-            details = [f"{self.experiment_data[exp]['name']}: {len(self.experiment_data[exp]['reagents'])} reagents" 
-                      for exp in selected_experiments]
-            raise ValueError(
-                f"Selected experiments require {total_reagents} locations, but exactly {self.MAX_LOCATIONS} locations must be used.\n"
-                f"Please adjust your selection.\n"
-                f"Current experiment requirements:\n" + "\n".join(details)
-            )
-
         # Initialize configuration
         config = {
             "tray_locations": [None] * self.MAX_LOCATIONS,
@@ -77,20 +67,55 @@ class ReagentOptimizer:
             "available_locations": set(range(self.MAX_LOCATIONS)),
             "daily_counts": daily_counts
         }
-
-        # Sort experiments by priority
+    
+        # Sort experiments by priority for initial placement
         sorted_experiments = self._sort_experiments_by_priority(selected_experiments, daily_counts)
-
-        # Phase 1: Place primary sets
+    
+        # Phase 1: Place primary sets for all selected experiments
         for exp in sorted_experiments:
             self._place_primary_set_days_optimized(exp, config)
-
-        # Phase 2: Optimize additional sets
-        self._optimize_additional_sets_days(sorted_experiments, config)
-
-        # Calculate days of operation
+    
+        # Phase 2: Fill remaining locations optimizing for days of operation
+        while config["available_locations"]:
+            # Find experiment that would benefit most from additional sets
+            best_exp = None
+            best_improvement = 0
+            
+            for exp in selected_experiments:
+                if len(self.experiment_data[exp]["reagents"]) <= len(config["available_locations"]):
+                    current_days = (config["results"][exp]["total_tests"] / 
+                                  config["daily_counts"][exp])
+                    
+                    # Calculate potential improvement
+                    available_locs = sorted(config["available_locations"])
+                    potential_days = self._calculate_potential_days(
+                        exp,
+                        available_locs[:len(self.experiment_data[exp]["reagents"])],
+                        config["daily_counts"][exp]
+                    )
+                    
+                    improvement = potential_days - current_days
+                    if improvement > best_improvement:
+                        best_improvement = improvement
+                        best_exp = exp
+    
+            if best_exp and best_improvement > 0:
+                self._place_primary_set_days_optimized(best_exp, config)
+            else:
+                # If no significant improvement possible, try to fill remaining slots
+                # with the experiment that has the highest daily usage
+                exp_with_highest_usage = max(
+                    selected_experiments,
+                    key=lambda x: config["daily_counts"][x]
+                )
+                if len(self.experiment_data[exp_with_highest_usage]["reagents"]) <= len(config["available_locations"]):
+                    self._place_primary_set_days_optimized(exp_with_highest_usage, config)
+                else:
+                    break
+    
+        # Calculate final days of operation
         self._calculate_days_of_operation(config)
-
+    
         return config
 
     def _sort_experiments_by_priority(self, experiments, daily_counts):
