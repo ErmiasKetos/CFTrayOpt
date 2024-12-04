@@ -363,5 +363,146 @@ class ReagentOptimizer:
             result["days_of_operation"] 
             for result in config["results"].values()
         )
+    def get_available_experiments(self):
+        """Return list of available experiments"""
+        return [{"id": id_, "name": exp["name"]} 
+                for id_, exp in self.experiment_data.items()]
 
-Would you like me to continue with Part 3, which will contain the utility methods and additional functionality?
+    def get_reagent_info(self, reagent_code):
+        """Get information about a specific reagent code"""
+        for exp_id, exp_data in self.experiment_data.items():
+            for reagent in exp_data["reagents"]:
+                if reagent["code"] == reagent_code:
+                    return {
+                        "experiment_id": exp_id,
+                        "experiment_name": exp_data["name"],
+                        "volume": reagent["vol"]
+                    }
+        return None
+
+    def get_location_info(self, location):
+        """Get capacity and other information about a specific location"""
+        return {
+            "location_number": location + 1,
+            "capacity": self.get_location_capacity(location),
+            "is_high_capacity": location < 4
+        }
+
+    def get_configuration_summary(self, config):
+        """Get a detailed summary of the configuration"""
+        if not config:
+            return None
+
+        summary = {
+            "overall_days": config["overall_days_of_operation"],
+            "total_locations_used": len([loc for loc in config["tray_locations"] if loc is not None]),
+            "high_capacity_usage": len([loc for i, loc in enumerate(config["tray_locations"]) 
+                                      if loc is not None and i < 4]),
+            "experiments": {},
+            "locations": []
+        }
+
+        # Experiment details
+        for exp_num, result in config["results"].items():
+            exp_reagents = defaultdict(list)
+            for i, loc in enumerate(config["tray_locations"]):
+                if loc and loc["experiment"] == exp_num:
+                    exp_reagents[loc["reagent_code"]].append({
+                        "location": i + 1,
+                        "tests": loc["tests_possible"],
+                        "capacity": loc["capacity"]
+                    })
+
+            summary["experiments"][exp_num] = {
+                "name": result["name"],
+                "daily_count": result["daily_count"],
+                "total_tests": result["total_tests"],
+                "days_of_operation": result["days_of_operation"],
+                "reagent_placements": dict(exp_reagents)
+            }
+
+        # Location details
+        for i, loc in enumerate(config["tray_locations"]):
+            location_info = {
+                "location": i + 1,
+                "capacity": self.get_location_capacity(i),
+                "is_high_capacity": i < 4
+            }
+            if loc:
+                location_info.update({
+                    "reagent_code": loc["reagent_code"],
+                    "experiment": loc["experiment"],
+                    "tests_possible": loc["tests_possible"],
+                    "volume_per_test": loc["volume_per_test"]
+                })
+            summary["locations"].append(location_info)
+
+        return summary
+
+    def validate_configuration(self, config):
+        """Validate a configuration for correctness and completeness"""
+        if not config or "tray_locations" not in config:
+            return False
+
+        # Check experiment completeness
+        for exp_num in config.get("results", {}):
+            required_reagents = {r["code"] for r in self.experiment_data[exp_num]["reagents"]}
+            found_reagents = set()
+            
+            for loc in config["tray_locations"]:
+                if loc and loc["experiment"] == exp_num:
+                    found_reagents.add(loc["reagent_code"])
+            
+            if not required_reagents.issubset(found_reagents):
+                return False
+
+        # Validate location assignments
+        for i, loc in enumerate(config["tray_locations"]):
+            if loc:
+                if loc["capacity"] != self.get_location_capacity(i):
+                    return False
+                if "tests_possible" not in loc or "volume_per_test" not in loc:
+                    return False
+
+        return True
+
+    def export_configuration(self, config, format='dict'):
+        """Export the configuration in various formats"""
+        if not config:
+            return None
+
+        basic_info = {
+            "timestamp": datetime.now().isoformat(),
+            "overall_days": config["overall_days_of_operation"],
+            "total_experiments": len(config["results"]),
+            "configuration": []
+        }
+
+        for i, loc in enumerate(config["tray_locations"]):
+            loc_info = {
+                "location": i + 1,
+                "capacity": self.get_location_capacity(i)
+            }
+            if loc:
+                loc_info.update({
+                    "reagent": loc["reagent_code"],
+                    "experiment": loc["experiment"],
+                    "tests": loc["tests_possible"]
+                })
+            basic_info["configuration"].append(loc_info)
+
+        if format == 'dict':
+            return basic_info
+        elif format == 'json':
+            return json.dumps(basic_info, indent=2)
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
+
+    def __str__(self):
+        """String representation of the optimizer"""
+        return f"ReagentOptimizer(experiments={len(self.experiment_data)}, max_locations={self.MAX_LOCATIONS})"
+
+    def __repr__(self):
+        """Detailed string representation of the optimizer"""
+        return f"ReagentOptimizer(experiments={len(self.experiment_data)}, max_locations={self.MAX_LOCATIONS})"
+
