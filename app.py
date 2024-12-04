@@ -3,10 +3,11 @@ import pandas as pd
 import plotly.graph_objects as go
 from reagent_optimizer import ReagentOptimizer
 from datetime import datetime
+from collections import defaultdict
 
 # Set page config
 st.set_page_config(
-    page_title="Reagent Tray Configurator",
+    page_title="Reagent Tray Configurator Pro",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
