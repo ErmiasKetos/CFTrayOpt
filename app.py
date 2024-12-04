@@ -6,7 +6,7 @@ from datetime import datetime
 
 # Set page config
 st.set_page_config(
-    page_title="Reagent Tray Configurator Pro",
+    page_title="Reagent Tray Configurator",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -215,7 +215,7 @@ def reset_app():
 
 
 def main():
-    st.title("🧪 Reagent Tray Configurator Pro")
+    st.title("🧪 Reagent Tray Configurator")
     
     # Initialize session state
     if 'config' not in st.session_state:
@@ -388,7 +388,7 @@ def main():
     if st.session_state.config is None:
         st.markdown("""
         <div class='header-box'>
-        <h2>Welcome to the Reagent Tray Configurator Pro! 👋</h2>
+        <h2>Welcome to the Reagent Tray Configurator! 👋</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -418,7 +418,7 @@ def main():
     # Add version tracking
     st.sidebar.markdown("""
     <div style='position: fixed; bottom: 0; left: 0; width: 100%; background-color: #f0f2f6; padding: 8px; text-align: center; font-size: 12px;'>
-    Reagent Tray Configurator Pro v2.0
+    Reagent Tray Configurator v2.0
     </div>
     """, unsafe_allow_html=True)
 
