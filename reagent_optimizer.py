@@ -57,14 +57,17 @@ class ReagentOptimizer:
             if exp not in daily_counts or daily_counts[exp] <= 0:
                 raise ValueError(f"Invalid daily count for experiment {exp}")
 
-        # Check total reagents needed
+        # Calculate total reagents needed
         total_reagents = sum(len(self.experiment_data[exp]["reagents"]) for exp in selected_experiments)
-        if total_reagents > self.MAX_LOCATIONS:
+        
+        # Validate exact number of locations
+        if total_reagents != self.MAX_LOCATIONS:
             details = [f"{self.experiment_data[exp]['name']}: {len(self.experiment_data[exp]['reagents'])} reagents" 
                       for exp in selected_experiments]
             raise ValueError(
-                f"Total reagents needed ({total_reagents}) exceeds available locations ({self.MAX_LOCATIONS}).\n"
-                f"Experiment requirements:\n" + "\n".join(details)
+                f"Selected experiments require {total_reagents} locations, but exactly {self.MAX_LOCATIONS} locations must be used.\n"
+                f"Please adjust your selection.\n"
+                f"Current experiment requirements:\n" + "\n".join(details)
             )
 
         # Initialize configuration
@@ -95,7 +98,6 @@ class ReagentOptimizer:
         experiment_metrics = []
         for exp in experiments:
             exp_data = self.experiment_data[exp]
-            # Calculate potential days of operation using high-capacity locations
             min_days = float('inf')
             for reagent in exp_data["reagents"]:
                 days = self.calculate_days_for_volume(
@@ -131,7 +133,6 @@ class ReagentOptimizer:
         num_reagents = len(exp_data["reagents"])
         daily_count = config["daily_counts"][exp]
 
-        # Calculate all possible location combinations
         available_locs = sorted(config["available_locations"])
         if len(available_locs) < num_reagents:
             raise ValueError(f"Not enough locations for experiment {exp}")
@@ -139,7 +140,6 @@ class ReagentOptimizer:
         best_locations = None
         best_days = 0
         
-        # Sort reagents by volume
         sorted_reagents = sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True)
 
         # Try high-capacity locations first for high-volume reagents
@@ -151,34 +151,25 @@ class ReagentOptimizer:
                 remaining_locs = [loc for loc in available_locs if loc not in available_270[:len(high_volume_reagents)]]
                 
                 if len(remaining_locs) >= len(remaining_reagents):
-                    test_locations = (
+                    best_locations = (
                         available_270[:len(high_volume_reagents)] +
                         remaining_locs[:len(remaining_reagents)]
                     )
-                    min_days = float('inf')
-                    for reagent, loc in zip(sorted_reagents, test_locations):
-                        capacity = self.get_location_capacity(loc)
-                        days = self.calculate_days_for_volume(reagent["vol"], capacity, daily_count)
-                        min_days = min(min_days, days)
-                    
-                    if min_days > best_days:
-                        best_days = min_days
-                        best_locations = test_locations
 
         # If no best locations found yet, try all available combinations
         if not best_locations:
             for i in range(len(available_locs) - num_reagents + 1):
-                test_locations = available_locs[i:i + num_reagents]
+                locations = available_locs[i:i + num_reagents]
                 min_days = float('inf')
                 
-                for reagent, loc in zip(sorted_reagents, test_locations):
+                for reagent, loc in zip(sorted_reagents, locations):
                     capacity = self.get_location_capacity(loc)
                     days = self.calculate_days_for_volume(reagent["vol"], capacity, daily_count)
                     min_days = min(min_days, days)
                 
                 if min_days > best_days:
                     best_days = min_days
-                    best_locations = test_locations
+                    best_locations = locations
 
         if best_locations:
             self._place_reagent_set(exp, best_locations, config)
@@ -187,7 +178,6 @@ class ReagentOptimizer:
 
     def _optimize_additional_sets_days(self, experiments, config):
         while config["available_locations"]:
-            # Find experiment with lowest days of operation
             min_days_exp = min(
                 experiments,
                 key=lambda x: config["results"][x]["total_tests"] / config["daily_counts"][x] 
@@ -201,7 +191,6 @@ class ReagentOptimizer:
                 current_days = (config["results"][min_days_exp]["total_tests"] / 
                               config["daily_counts"][min_days_exp])
                 
-                # Try to place additional set
                 available_locs = sorted(config["available_locations"])
                 potential_days = self._calculate_potential_days(
                     min_days_exp,
@@ -209,7 +198,7 @@ class ReagentOptimizer:
                     config["daily_counts"][min_days_exp]
                 )
                 
-                if potential_days > current_days * 0.25:  # Lower threshold for days optimization
+                if potential_days > current_days * 0.25:
                     self._place_primary_set_days_optimized(min_days_exp, config)
                 else:
                     break
@@ -222,7 +211,7 @@ class ReagentOptimizer:
         min_days = float('inf')
         
         for reagent, loc in zip(
-            sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True), 
+            sorted(exp_data["reagents"], key=lambda r: r["vol"], reverse=True),
             locations
         ):
             capacity = self.get_location_capacity(loc)
@@ -290,6 +279,11 @@ class ReagentOptimizer:
                 min_days = days
         
         config["overall_days_of_operation"] = round(min_days, 1)
+
+        # Adjust total tests possible based on overall days of operation
+        for exp_num, result in config["results"].items():
+            max_possible_tests = int(config["overall_days_of_operation"] * result["daily_count"])
+            result["actual_total_tests"] = min(result["total_tests"], max_possible_tests)
 
     def get_available_experiments(self):
         """Return list of available experiments"""
