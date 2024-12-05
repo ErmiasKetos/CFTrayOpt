@@ -143,12 +143,12 @@ def update_kcf_summary(data):
             st.error(f"Error updating Google Sheet: {str(e)}")
     return False
 
-def check_kcf_summary():
+def check_google_sheet():
     sheet = init_google_sheets()
     if sheet:
         try:
             values = sheet.get_all_values()
-            if len(values) > 1:  # Assuming the first row is headers
+            if len(values) > 0:  # Check if the sheet has any data
                 return True
         except Exception as e:
             st.error(f"Error accessing Google Sheet: {str(e)}")
@@ -352,8 +352,9 @@ def display_results(config, selected_experiments, customer_info):
                 st.dataframe(locations_df, use_container_width=True)
 
 def reset_app():
-    # Reset app state here... (This function was not provided in the original code)
-    pass
+    """Clears all session state variables to reset the app."""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
 
 def main():
     st.title("🧪 Reagent Tray Configurator")
@@ -367,15 +368,13 @@ def main():
         st.session_state.daily_counts = {}
 
     # Check for required modules
-    missing_modules = check_required_modules()
-    if missing_modules:
-        st.warning("Google Sheets integration is not available. Some features will be limited.")
-        st.info("To enable full functionality, please install the required modules:")
-        st.code("pip install gspread google-auth")
+    # Check Google Sheets integration
+    sheets_integration_status = check_google_sheet()
+    if not sheets_integration_status:
+        st.warning("Unable to access the Google Sheet. Some features may be limited.")
+        st.info("Please ensure the GOOGLE_SHEETS_CREDS environment variable is set correctly in your Streamlit Cloud settings and the service account has access to the sheet.")
     else:
-        # Check KCFtray2024.csv status
-        if not check_kcf_summary():
-            st.warning("KCFtray2024.csv is not accessible. Some features will be limited.")
+        st.success("Google Sheets integration is working correctly.")
 
     # Customer Information Section
     st.sidebar.markdown("### 📝 Customer Information")
