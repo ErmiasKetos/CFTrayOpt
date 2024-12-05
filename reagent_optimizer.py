@@ -41,7 +41,7 @@ class ReagentOptimizer:
             42: {"name": "Aluminum-BB", "reagents": [{"code": "KR42E1", "vol": 1000}, {"code": "KR42E2", "vol": 1000}]}
         }
         self.MAX_LOCATIONS = 16
-
+   
     def calculate_tests(self, volume_ul, capacity_ml):
         """Calculate number of tests possible for a given volume and capacity"""
         return int((capacity_ml * 1000) / volume_ul)
@@ -167,7 +167,7 @@ class ReagentOptimizer:
         ]
         
    
-    # Phase 1: Initial placement prioritizing high-volume and high-frequency tests
+        # Phase 1: Initial placement prioritizing high-volume and high-frequency tests
         for exp in sorted_experiments:
             num_reagents = len(self.experiment_data[exp]["reagents"])
             if num_reagents > len(config["available_locations"]):
@@ -448,5 +448,4 @@ class ReagentOptimizer:
 
     def __repr__(self):
         return f"ReagentOptimizer(experiments={len(self.experiment_data)}, max_locations={self.MAX_LOCATIONS})"
-
 
