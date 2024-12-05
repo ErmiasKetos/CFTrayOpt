@@ -385,7 +385,6 @@ def main():
     if 'daily_counts' not in st.session_state:
         st.session_state.daily_counts = {}
 
-    # Check for required modules
     # Check Google Sheets integration
     sheets_integration_status = check_google_sheet()
     if not sheets_integration_status:
@@ -553,16 +552,18 @@ def main():
                     qr_data
                 ]
                 
-                if not missing_modules:
-                    # Update KCFtray2024
+                if sheets_integration_status:
                     if update_kcf_summary(kcf_data):
                         st.success("Tray marked as shipped and KCF summary updated successfully!")
                     else:
                         st.error("Failed to update KCF summary. Please try again or contact support.")
                 else:
-                    st.warning("KCF summary could not be updated due to missing modules.")
-                    st.info("Tray information:")
-                    st.json(kcf_data)
+                    st.warning("KCF summary could not be updated due to Google Sheets integration issues.")
+                
+                # Display QR code
+                st.subheader("Tray QR Code")
+                st.image(f"data:image/png;base64,{qr_code}", caption="Scan this QR code for tray information")
+                st.info(f"Tray Serial Number: {tray_serial}")
             else:
                 st.error("Please complete all QC checks and provide a tracking number before shipping.")
 
@@ -651,4 +652,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
