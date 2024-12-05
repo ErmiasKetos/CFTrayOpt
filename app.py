@@ -351,10 +351,28 @@ def display_results(config, selected_experiments, customer_info):
                 ])
                 st.dataframe(locations_df, use_container_width=True)
 
+
 def reset_app():
     """Clears all session state variables to reset the app."""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    
+    # Reinitialize essential session state variables
+    st.session_state.config = None
+    st.session_state.selected_experiments = []
+    st.session_state.daily_counts = {}
+    
+    # Clear input fields by setting them to default values
+    st.session_state.customer_name = ""
+    st.session_state.unit_location = ""
+    st.session_state.operator_name = ""
+    
+    # Reset experiment selection checkboxes
+    for exp in ReagentOptimizer().get_available_experiments():
+        st.session_state[f"exp_{exp['id']}"] = False
+        st.session_state[f"exp_{exp['id']}_hr"] = False
+        st.session_state[f"exp_{exp['id']}_other"] = False
+        
 
 def main():
     st.title("🧪 Reagent Tray Configurator")
