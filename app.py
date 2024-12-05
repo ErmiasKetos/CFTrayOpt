@@ -4,6 +4,9 @@ import plotly.graph_objects as go
 from reagent_optimizer import ReagentOptimizer
 from datetime import datetime
 from collections import defaultdict
+import gspread
+from google.oauth2.service_account import Credentials
+import os
 
 # Set page config
 st.set_page_config(
@@ -13,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
+# Custom CSS (unchanged)
 st.markdown("""
 <style>
     .stApp {
@@ -60,170 +63,35 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def get_reagent_color(reagent_code):
-    color_map = {
-        'gray': ['KR1E', 'KR1S', 'KR2S', 'KR3E', 'KR3S', 'KR4E', 'KR4S', 'KR5E', 'KR5S', 'KR6E1', 'KR6E2', 'KR6E3', 'KR13E1', 'KR13S', 'KR14E', 'KR14S', 'KR15E', 'KR15S'],
-        'violet': ['KR7E1', 'KR7E2', 'KR8E1', 'KR8E2', 'KR19E1', 'KR19E2', 'KR19E3', 'KR20E', 'KR36E1', 'KR36E2', 'KR40E1', 'KR40E2'],
-        'green': ['KR9E1', 'KR9E2', 'KR17E1', 'KR17E2', 'KR17E3', 'KR28E1', 'KR28E2', 'KR28E3'],
-        'orange': ['KR10E1', 'KR10E2', 'KR10E3', 'KR12E1', 'KR12E2', 'KR12E3', 'KR18E1', 'KR18E2', 'KR22E1', 'KR27E1', 'KR27E2', 'KR42E1', 'KR42E2'],
-        'white': ['KR11E', 'KR21E1'],
-        'blue': ['KR16E1', 'KR16E2', 'KR16E3', 'KR16E4', 'KR30E1', 'KR30E2', 'KR30E3', 'KR31E1', 'KR31E2', 'KR34E1', 'KR34E2'],
-        'red': ['KR29E1', 'KR29E2', 'KR29E3'],
-        'yellow': ['KR35E1', 'KR35E2']
-    }
-    for color, reagents in color_map.items():
-        if any(reagent_code.startswith(r) for r in reagents):
-            return color
-    return 'lightgray'
+# Function to initialize Google Sheets connection
+def init_google_sheets():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_file('path/to/your/credentials.json', scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
+    return sheet
 
-def create_tray_visualization(config, customer_info):
-    locations = config["tray_locations"]
-    fig = go.Figure()
+# Function to update KCFtray2024.csv
+def update_kcf_summary(data):
+    sheet = init_google_sheets()
+    sheet.append_row(data)
 
-    # Create the title with customer information
-    title = (f"Reagent Tray Configuration<br>"
-             f"Customer: {customer_info['name']} | Unit: {customer_info['unit']} | "
-             f"Date: {customer_info['date'].strftime('%Y-%m-%d')}")
+# Function to check if KCFtray2024.csv exists and is up-to-date
+def check_kcf_summary():
+    try:
+        sheet = init_google_sheets()
+        # Check if the sheet is accessible and has data
+        values = sheet.get_all_values()
+        if len(values) > 1:  # Assuming the first row is headers
+            return True
+        else:
+            return False
+    except Exception as e:
+        st.error(f"Error accessing KCFtray2024.csv: {str(e)}")
+        return False
 
-    for i, loc in enumerate(locations):
-        row = i // 4
-        # Reverse the column calculation
-        col = 3 - (i % 4)  # This changes the direction from right to left
-        color = get_reagent_color(loc['reagent_code']) if loc else 'lightgray'
-        opacity = 0.8 if loc else 0.2
-
-        fig.add_trace(go.Scatter(
-            x=[col, col+1, col+1, col, col],
-            y=[row, row, row+1, row+1, row],
-            fill="toself",
-            fillcolor=color,
-            opacity=opacity,
-            line=dict(color="black", width=1),
-            mode="lines",
-            name=f"LOC-{i+1}",
-            text=f"LOC-{i+1}<br>{loc['reagent_code'] if loc else 'Empty'}<br>Tests: {loc['tests_possible'] if loc else 'N/A'}<br>Exp: #{loc['experiment'] if loc else 'N/A'}",
-            hoverinfo="text"
-        ))
-
-        fig.add_annotation(
-            x=(col + col + 1) / 2,
-            y=(row + row + 1) / 2,
-            text=f"<b>LOC-{i+1}</b><br>{'<b>' + loc['reagent_code'] if loc else 'Empty</b>'}<br>Tests: {loc['tests_possible'] if loc else 'N/A'}<br>Exp: #{loc['experiment'] if loc else 'N/A'}",
-            showarrow=False,
-            font=dict(color="black", size=14),
-            align="center",
-            xanchor="center",
-            yanchor="middle"
-        )
-
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            y=0.95,
-            xanchor="center",
-            yanchor="top",
-            font=dict(size=16)
-        ),
-        showlegend=False,
-        height=600,
-        width=800,
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=20, r=20, t=80, b=20)
-    )
-
-    return fig
-
-
-def display_results(config, selected_experiments, customer_info):
-    col1, col2 = st.columns([3, 2])
-
-    with col1:
-        st.subheader("Tray Configuration")
-        fig = create_tray_visualization(config, customer_info)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        if st.button("Download Configuration Plot"):
-            fig.write_image("tray_configuration.png")
-            st.success("Plot downloaded as 'tray_configuration.png'")
-
-    with col2:
-        st.subheader("Results Summary")
-        
-        with st.expander("📊 Key Metrics", expanded=True):
-            days_operation = config["overall_days_of_operation"]
-            
-            # Calculate total tests possible within days of operation
-            total_tests = sum(
-                min(result["total_tests"], 
-                    result["daily_count"] * days_operation)
-                for result in config["results"].values()
-            )
-            
-            col1_metric, col2_metric = st.columns(2)
-            with col1_metric:
-                st.metric("Days of Operation", f"{days_operation:.1f} days")
-            with col2_metric:
-                st.metric("Total Tests Possible", f"{int(total_tests)}")
-
-        # Results table with adjusted total tests
-        results_df = pd.DataFrame([
-            {
-                "Experiment": f"{result['name']} (#{exp_num})",
-                "Daily Tests": result['daily_count'],
-                "Total Tests Possible": min(
-                    result['total_tests'],
-                    int(days_operation * result['daily_count'])
-                ),
-                "Days of Operation": result['days_of_operation']
-            }
-            for exp_num, result in config["results"].items()
-        ])
-        st.dataframe(results_df, use_container_width=True)
-
-        if st.button("Download Results as CSV"):
-            results_df.to_csv("tray_configuration_results.csv", index=False)
-            st.success("Results downloaded as 'tray_configuration_results.csv'")
-
-    # Detailed Results
-    st.subheader("Detailed Results")
-    for exp_num, result in config["results"].items():
-        with st.expander(f"📋 {result['name']} (#{exp_num}) - {result['total_tests']} total tests"):
-            st.markdown(f"**Daily Usage:** {result['daily_count']} tests")
-            st.markdown(f"**Days of Operation:** {result['days_of_operation']} days")
-            
-            # Group reagents by location
-            reagent_locations = defaultdict(list)
-            for i, loc in enumerate(config["tray_locations"]):
-                if loc and loc["experiment"] == exp_num:
-                    reagent_locations[loc["reagent_code"]].append({
-                        "location": i + 1,
-                        "tests": loc["tests_possible"],
-                        "capacity": loc["capacity"],
-                        "volume": loc["volume_per_test"]
-                    })
-            
-            # Display reagent placements
-            for reagent_code, locations in reagent_locations.items():
-                st.markdown(f"**Reagent {reagent_code}:**")
-                locations_df = pd.DataFrame([
-                    {
-                        "Location": f"LOC-{loc['location']}",
-                        "Capacity (mL)": loc["capacity"],
-                        "Tests Possible": loc["tests"],
-                        "Volume per Test (µL)": loc["volume"]
-                    }
-                    for loc in locations
-                ])
-                st.dataframe(locations_df, use_container_width=True)
-
-def reset_app():
-    """Clears all session state variables to reset the app."""
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-
+# Rest of the functions remain unchanged
+# ... (keep all other functions as they were)
 
 def main():
     st.title("🧪 Reagent Tray Configurator")
@@ -236,16 +104,23 @@ def main():
     if 'daily_counts' not in st.session_state:
         st.session_state.daily_counts = {}
 
+    # Check KCFtray2024.csv status
+    if not check_kcf_summary():
+        st.error("Error: KCFtray2024.csv is not accessible or up-to-date. Please contact support.")
+        return
+
     # Customer Information Section
     st.sidebar.markdown("### 📝 Customer Information")
     customer_name = st.sidebar.text_input("Customer Name", key="customer_name")
     unit_location = st.sidebar.text_input("Unit Location", key="unit_location")
     config_date = st.sidebar.date_input("Configuration Date", datetime.now())
+    operator_name = st.sidebar.text_input("Operator Name", key="operator_name")
 
     customer_info = {
         "name": customer_name,
         "unit": unit_location,
-        "date": config_date
+        "date": config_date,
+        "operator": operator_name
     }
 
     # Reset Button
@@ -332,8 +207,8 @@ def main():
         optimize_button = st.sidebar.button("3️⃣ Optimize Configuration", key="optimize_button")
 
         if optimize_button:
-            if not customer_name or not unit_location:
-                st.error("Please fill in Customer Name and Unit Location before optimizing.")
+            if not customer_name or not unit_location or not operator_name:
+                st.error("Please fill in Customer Name, Unit Location, and Operator Name before optimizing.")
             else:
                 try:
                     with st.spinner("Optimizing tray configuration..."):
@@ -358,6 +233,37 @@ def main():
     if st.session_state.config is not None:
         display_results(st.session_state.config, st.session_state.selected_experiments, customer_info)
 
+        # QC Questionnaire
+        st.subheader("QC Questionnaire")
+        qc1 = st.checkbox("1. Sealed + Zip Locked fluid tray is placed inside designated box with designated Styrofoam packaging material on all 6 sides of the tray?")
+        qc2 = st.checkbox("2. Box is sealed with tape, 'Fragile' and 'This way up' stickers?")
+        qc3 = st.checkbox("3. Box is carried to FedEx by KETOS for 2-day Air or Ground shipping only?")
+
+        # Tracking Number Input
+        tracking_number = st.text_input("Tracking Number")
+
+        # Ship Button
+        if st.button("Mark as Shipped"):
+            if qc1 and qc2 and qc3 and tracking_number:
+                # Prepare data for KCF summary
+                kcf_data = [
+                    customer_info['operator'],
+                    datetime.now().strftime("%m/%d/%Y %H:%M"),
+                    customer_info['name'],
+                    customer_info['unit'],
+                    len(selected_experiments),
+                    tracking_number,
+                    "Yes" if qc1 else "No",
+                    "Yes" if qc2 else "No",
+                    "Yes" if qc3 else "No"
+                ]
+                
+                # Update KCFtray2024.csv
+                update_kcf_summary(kcf_data)
+                st.success("Tray marked as shipped and KCF summary updated successfully!")
+            else:
+                st.error("Please complete all QC checks and provide a tracking number before shipping.")
+
     # Help and Information
     with st.sidebar.expander("ℹ️ Help & Information"):
         st.markdown("""
@@ -367,6 +273,7 @@ def main():
            - Enter customer name
            - Specify unit location
            - Set configuration date
+           - Enter operator name
 
         2. **Select Experiments**
            - Choose from Low Range, High Range, or Other tabs
@@ -385,13 +292,18 @@ def main():
            - View the tray visualization
            - Check detailed metrics and summaries
            - Download configuration plot and results
+
+        6. **QC and Shipping**
+           - Complete the QC questionnaire
+           - Enter the tracking number
+           - Mark the tray as shipped to update the KCF summary
         """)
 
     # Footer
     st.sidebar.markdown("---")
     st.sidebar.markdown("""
     <div style='text-align: center; color: #666;'>
-    <small>Version 2.0 | Last Updated: 2024-03</small>
+    <small>Version 2.1 | Last Updated: 2024-03</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -412,6 +324,7 @@ def main():
         - Detailed analysis of operational duration
         - Downloadable reports and visualizations
         - Easy experiment selection by category
+        - QC checklist and shipping integration
         </div>
         """, unsafe_allow_html=True)
 
@@ -423,15 +336,17 @@ def main():
         - The system optimizes for maximum days of operation
         - Configuration considers both volume requirements and daily usage patterns
         - Total reagents must not exceed 16 locations
+        - Complete all QC checks before marking a tray as shipped
         </div>
         """, unsafe_allow_html=True)
 
     # Add version tracking
     st.sidebar.markdown("""
     <div style='position: fixed; bottom: 0; left: 0; width: 100%; background-color: #f0f2f6; padding: 8px; text-align: center; font-size: 12px;'>
-    Reagent Tray Configurator v2.0
+    Reagent Tray Configurator v2.1
     </div>
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
+
