@@ -75,25 +75,21 @@ def check_required_modules():
 
 # Function to initialize Google Sheets connection
 def init_google_sheets():
-    missing_modules = check_required_modules()
-    if missing_modules:
-        st.error(f"The following required modules are missing: {', '.join(missing_modules)}")
-        st.info("Please install the missing modules using the following command:")
-        st.code("pip install gspread google-auth")
-        return None
-
     try:
-        import gspread
-        from google.oauth2.service_account import Credentials
+        # Get the Google Sheets credentials from the Streamlit secrets
+        creds_dict = st.secrets["GOOGLE_SHEETS_CREDS"]
+        
+        # Convert the private_key string to bytes
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].encode().decode('unicode_escape')
+        
+        # Create credentials object
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        )
 
-        credentials_path = 'path/to/your/credentials.json'
-        if not os.path.exists(credentials_path):
-            st.error(f"Credentials file not found: {credentials_path}")
-            st.info("Please ensure the credentials file is in the correct location and has the correct name.")
-            return None
-
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_file(credentials_path, scopes=scope)
+        # Authorize and get the sheet
         client = gspread.authorize(creds)
         sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
         return sheet
