@@ -130,9 +130,11 @@ def generate_qr_code(data):
     
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
-    return base64.b64encode(buffered.getvalue()).decode()
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return img, img_str
 
-# Update other functions that reference KCFtray2024.csv
+# Update other functions ...
 def update_kcf_summary(data):
     sheet = init_google_sheets()
     if sheet:
@@ -549,7 +551,7 @@ def main():
                     "Yes" if qc2 else "No",
                     "Yes" if qc3 else "No",
                     customer_info['operator'],
-                    qr_code_base64  # This will be used to create the IMAGE formula in the sheet
+                    qr_code_base64  
                 ]
                 
                 if sheets_integration_status:
@@ -562,10 +564,11 @@ def main():
                 
                 # Display QR code
                 st.subheader("Tray QR Code")
-            st.image(qr_code, caption="Scan this QR code for tray information")
-            st.info(f"Tray Serial Number: {tray_serial}")
-        else:
-            st.error("Please complete all QC checks and provide a tracking number before shipping.")
+                st.subheader("Tray QR Code")
+                st.image(qr_img, caption="Scan this QR code for tray information")
+                st.info(f"Tray Serial Number: {tray_serial}")
+            else:
+                st.error("Please complete all QC checks and provide a tracking number before shipping.")
 
 
     # Help and Information
