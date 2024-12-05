@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from reagent_optimizer import ReagentOptimizer
 from datetime import datetime
 from collections import defaultdict
+import importlib
 import gspread
 from google.oauth2.service_account import Credentials
 import os
@@ -63,35 +64,70 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Function to check for required modules
+def check_required_modules():
+    required_modules = ['gspread', 'google.oauth2']
+    missing_modules = []
+    for module in required_modules:
+        if importlib.util.find_spec(module) is None:
+            missing_modules.append(module)
+    return missing_modules
+
 # Function to initialize Google Sheets connection
 def init_google_sheets():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_file('path/to/your/credentials.json', scopes=scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
-    return sheet
+    missing_modules = check_required_modules()
+    if missing_modules:
+        st.error(f"The following required modules are missing: {', '.join(missing_modules)}")
+        st.info("Please install the missing modules using the following command:")
+        st.code("pip install gspread google-auth")
+        return None
+
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_file('path/to/your/credentials.json', scopes=scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
+        return sheet
+    except Exception as e:
+        st.error(f"Error initializing Google Sheets: {str(e)}")
+        return None
 
 # Function to update KCFtray2024.csv
 def update_kcf_summary(data):
     sheet = init_google_sheets()
-    sheet.append_row(data)
+    if sheet:
+        try:
+            sheet.append_row(data)
+            return True
+        except Exception as e:
+            st.error(f"Error updating KCF summary: {str(e)}")
+    return False
 
 # Function to check if KCFtray2024.csv exists and is up-to-date
 def check_kcf_summary():
-    try:
-        sheet = init_google_sheets()
-        # Check if the sheet is accessible and has data
-        values = sheet.get_all_values()
-        if len(values) > 1:  # Assuming the first row is headers
-            return True
-        else:
-            return False
-    except Exception as e:
-        st.error(f"Error accessing KCFtray2024.csv: {str(e)}")
-        return False
+    sheet = init_google_sheets()
+    if sheet:
+        try:
+            values = sheet.get_all_values()
+            if len(values) > 1:  # Assuming the first row is headers
+                return True
+        except Exception as e:
+            st.error(f"Error accessing KCFtray2024.csv: {str(e)}")
+    return False
 
 # Rest of the functions remain unchanged
 # ... (keep all other functions as they were)
+
+def display_results(config, selected_experiments, customer_info):
+    # Display results here... (This function was not provided in the original code)
+    pass
+
+def reset_app():
+    # Reset app state here... (This function was not provided in the original code)
+    pass
 
 def main():
     st.title("🧪 Reagent Tray Configurator")
@@ -104,10 +140,16 @@ def main():
     if 'daily_counts' not in st.session_state:
         st.session_state.daily_counts = {}
 
-    # Check KCFtray2024.csv status
-    if not check_kcf_summary():
-        st.error("Error: KCFtray2024.csv is not accessible or up-to-date. Please contact support.")
-        return
+    # Check for required modules
+    missing_modules = check_required_modules()
+    if missing_modules:
+        st.warning("Google Sheets integration is not available. Some features will be limited.")
+        st.info("To enable full functionality, please install the required modules:")
+        st.code("pip install gspread google-auth")
+    else:
+        # Check KCFtray2024.csv status
+        if not check_kcf_summary():
+            st.warning("KCFtray2024.csv is not accessible. Some features will be limited.")
 
     # Customer Information Section
     st.sidebar.markdown("### 📝 Customer Information")
@@ -258,9 +300,16 @@ def main():
                     "Yes" if qc3 else "No"
                 ]
                 
-                # Update KCFtray2024.csv
-                update_kcf_summary(kcf_data)
-                st.success("Tray marked as shipped and KCF summary updated successfully!")
+                if not missing_modules:
+                    # Update KCFtray2024.csv
+                    if update_kcf_summary(kcf_data):
+                        st.success("Tray marked as shipped and KCF summary updated successfully!")
+                    else:
+                        st.error("Failed to update KCF summary. Please try again or contact support.")
+                else:
+                    st.warning("KCF summary could not be updated due to missing modules.")
+                    st.info("Tray information:")
+                    st.json(kcf_data)
             else:
                 st.error("Please complete all QC checks and provide a tracking number before shipping.")
 
