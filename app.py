@@ -535,7 +535,7 @@ def main():
                 # Generate tray serial number and QR code
                 tray_serial = generate_tray_serial()
                 qr_data = f"Customer: {customer_info['name']}\nLocation: {customer_info['unit']}\nDate: {config_date.strftime('%Y-%m-%d')}\nSerial: {tray_serial}"
-                qr_code = generate_qr_code(qr_data)
+                qr_code, qr_code_base64 = generate_qr_code(qr_data)
 
                 # Prepare data for KCF summary
                 kcf_data = [
@@ -549,7 +549,7 @@ def main():
                     "Yes" if qc2 else "No",
                     "Yes" if qc3 else "No",
                     customer_info['operator'],
-                    qr_data
+                    qr_code_base64  # This will be used to create the IMAGE formula in the sheet
                 ]
                 
                 if sheets_integration_status:
@@ -562,10 +562,11 @@ def main():
                 
                 # Display QR code
                 st.subheader("Tray QR Code")
-                st.image(f"data:image/png;base64,{qr_code}", caption="Scan this QR code for tray information")
-                st.info(f"Tray Serial Number: {tray_serial}")
-            else:
-                st.error("Please complete all QC checks and provide a tracking number before shipping.")
+            st.image(qr_code, caption="Scan this QR code for tray information")
+            st.info(f"Tray Serial Number: {tray_serial}")
+        else:
+            st.error("Please complete all QC checks and provide a tracking number before shipping.")
+
 
     # Help and Information
     with st.sidebar.expander("ℹ️ Help & Information"):
