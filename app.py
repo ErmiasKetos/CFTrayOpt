@@ -10,6 +10,7 @@ import json
 from google.oauth2 import service_account
 from google.oauth2.service_account import Credentials
 import os
+from google.auth.exceptions import GoogleAuthError
 
 # Set page config
 st.set_page_config(
@@ -77,6 +78,7 @@ def check_required_modules():
 
 # Function to initialize Google Sheets connection
 
+
 def init_google_sheets():
     try:
         # Get the Google Sheets credentials from the Streamlit secrets
@@ -86,18 +88,32 @@ def init_google_sheets():
             st.error("Google Sheets credentials not found in Streamlit secrets.")
             return None
         
+        # Log the structure of the credentials (without sensitive info)
+        st.write("Credential keys:", list(creds_dict.keys()))
+        
         # Create credentials object
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        )
-
+        try:
+            creds = service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+            )
+        except ValueError as ve:
+            st.error(f"Error creating credentials: {str(ve)}")
+            return None
+        
         # Authorize and get the sheet
-        client = gspread.authorize(creds)
-        sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
-        return sheet
+        try:
+            client = gspread.authorize(creds)
+            sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
+            return sheet
+        except gspread.exceptions.APIError as api_error:
+            st.error(f"API Error: {str(api_error)}")
+            return None
+        except GoogleAuthError as auth_error:
+            st.error(f"Authentication Error: {str(auth_error)}")
+            return None
     except Exception as e:
-        st.error(f"Error initializing Google Sheets: {str(e)}")
+        st.error(f"Unexpected error initializing Google Sheets: {str(e)}")
         return None
 
 
