@@ -86,8 +86,14 @@ def init_google_sheets():
         import gspread
         from google.oauth2.service_account import Credentials
 
+        credentials_path = 'path/to/your/credentials.json'
+        if not os.path.exists(credentials_path):
+            st.error(f"Credentials file not found: {credentials_path}")
+            st.info("Please ensure the credentials file is in the correct location and has the correct name.")
+            return None
+
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_file('path/to/your/credentials.json', scopes=scope)
+        creds = Credentials.from_service_account_file(credentials_path, scopes=scope)
         client = gspread.authorize(creds)
         sheet = client.open_by_key('17w0SV6waugh6oc0hrGS7i2FcOFC3jnvc').worksheet('KCFtray2024')
         return sheet
@@ -118,12 +124,163 @@ def check_kcf_summary():
             st.error(f"Error accessing KCFtray2024.csv: {str(e)}")
     return False
 
-# Rest of the functions remain unchanged
-# ... (keep all other functions as they were)
+def get_reagent_color(reagent_code):
+    color_map = {
+        'gray': ['KR1E', 'KR1S', 'KR2S', 'KR3E', 'KR3S', 'KR4E', 'KR4S', 'KR5E', 'KR5S', 'KR6E1', 'KR6E2', 'KR6E3', 'KR13E1', 'KR13S', 'KR14E', 'KR14S', 'KR15E', 'KR15S'],
+        'violet': ['KR7E1', 'KR7E2', 'KR8E1', 'KR8E2', 'KR19E1', 'KR19E2', 'KR19E3', 'KR20E', 'KR36E1', 'KR36E2', 'KR40E1', 'KR40E2'],
+        'green': ['KR9E1', 'KR9E2', 'KR17E1', 'KR17E2', 'KR17E3', 'KR28E1', 'KR28E2', 'KR28E3'],
+        'orange': ['KR10E1', 'KR10E2', 'KR10E3', 'KR12E1', 'KR12E2', 'KR12E3', 'KR18E1', 'KR18E2', 'KR22E1', 'KR27E1', 'KR27E2', 'KR42E1', 'KR42E2'],
+        'white': ['KR11E', 'KR21E1'],
+        'blue': ['KR16E1', 'KR16E2', 'KR16E3', 'KR16E4', 'KR30E1', 'KR30E2', 'KR30E3', 'KR31E1', 'KR31E2', 'KR34E1', 'KR34E2'],
+        'red': ['KR29E1', 'KR29E2', 'KR29E3'],
+        'yellow': ['KR35E1', 'KR35E2']
+    }
+    for color, reagents in color_map.items():
+        if any(reagent_code.startswith(r) for r in reagents):
+            return color
+    return 'lightgray'
+
+def create_tray_visualization(config, customer_info):
+    locations = config["tray_locations"]
+    fig = go.Figure()
+
+    # Create the title with customer information
+    title = (f"Reagent Tray Configuration<br>"
+             f"Customer: {customer_info['name']} | Unit: {customer_info['unit']} | "
+             f"Date: {customer_info['date'].strftime('%Y-%m-%d')}")
+
+    for i, loc in enumerate(locations):
+        row = i // 4
+        # Reverse the column calculation
+        col = 3 - (i % 4)  # This changes the direction from right to left
+        color = get_reagent_color(loc['reagent_code']) if loc else 'lightgray'
+        opacity = 0.8 if loc else 0.2
+
+        fig.add_trace(go.Scatter(
+            x=[col, col+1, col+1, col, col],
+            y=[row, row, row+1, row+1, row],
+            fill="toself",
+            fillcolor=color,
+            opacity=opacity,
+            line=dict(color="black", width=1),
+            mode="lines",
+            name=f"LOC-{i+1}",
+            text=f"LOC-{i+1}<br>{loc['reagent_code'] if loc else 'Empty'}<br>Tests: {loc['tests_possible'] if loc else 'N/A'}<br>Exp: #{loc['experiment'] if loc else 'N/A'}",
+            hoverinfo="text"
+        ))
+
+        fig.add_annotation(
+            x=(col + col + 1) / 2,
+            y=(row + row + 1) / 2,
+            text=f"<b>LOC-{i+1}</b><br>{'<b>' + loc['reagent_code'] if loc else 'Empty</b>'}<br>Tests: {loc['tests_possible'] if loc else 'N/A'}<br>Exp: #{loc['experiment'] if loc else 'N/A'}",
+            showarrow=False,
+            font=dict(color="black", size=14),
+            align="center",
+            xanchor="center",
+            yanchor="middle"
+        )
+
+    fig.update_layout(
+        title=dict(
+            text=title,
+            x=0.5,
+            y=0.95,
+            xanchor="center",
+            yanchor="top",
+            font=dict(size=16)
+        ),
+        showlegend=False,
+        height=600,
+        width=800,
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=20, r=20, t=80, b=20)
+    )
+
+    return fig
 
 def display_results(config, selected_experiments, customer_info):
-    # Display results here... (This function was not provided in the original code)
-    pass
+    col1, col2 = st.columns([3, 2])
+
+    with col1:
+        st.subheader("Tray Configuration")
+        fig = create_tray_visualization(config, customer_info)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        if st.button("Download Configuration Plot"):
+            fig.write_image("tray_configuration.png")
+            st.success("Plot downloaded as 'tray_configuration.png'")
+
+    with col2:
+        st.subheader("Results Summary")
+        
+        with st.expander("📊 Key Metrics", expanded=True):
+            days_operation = config["overall_days_of_operation"]
+            
+            # Calculate total tests possible within days of operation
+            total_tests = sum(
+                min(result["total_tests"], 
+                    result["daily_count"] * days_operation)
+                for result in config["results"].values()
+            )
+            
+            col1_metric, col2_metric = st.columns(2)
+            with col1_metric:
+                st.metric("Days of Operation", f"{days_operation:.1f} days")
+            with col2_metric:
+                st.metric("Total Tests Possible", f"{int(total_tests)}")
+
+        # Results table with adjusted total tests
+        results_df = pd.DataFrame([
+            {
+                "Experiment": f"{result['name']} (#{exp_num})",
+                "Daily Tests": result['daily_count'],
+                "Total Tests Possible": min(
+                    result['total_tests'],
+                    int(days_operation * result['daily_count'])
+                ),
+                "Days of Operation": result['days_of_operation']
+            }
+            for exp_num, result in config["results"].items()
+        ])
+        st.dataframe(results_df, use_container_width=True)
+
+        if st.button("Download Results as CSV"):
+            results_df.to_csv("tray_configuration_results.csv", index=False)
+            st.success("Results downloaded as 'tray_configuration_results.csv'")
+
+    # Detailed Results
+    st.subheader("Detailed Results")
+    for exp_num, result in config["results"].items():
+        with st.expander(f"📋 {result['name']} (#{exp_num}) - {result['total_tests']} total tests"):
+            st.markdown(f"**Daily Usage:** {result['daily_count']} tests")
+            st.markdown(f"**Days of Operation:** {result['days_of_operation']} days")
+            
+            # Group reagents by location
+            reagent_locations = defaultdict(list)
+            for i, loc in enumerate(config["tray_locations"]):
+                if loc and loc["experiment"] == exp_num:
+                    reagent_locations[loc["reagent_code"]].append({
+                        "location": i + 1,
+                        "tests": loc["tests_possible"],
+                        "capacity": loc["capacity"],
+                        "volume": loc["volume_per_test"]
+                    })
+            
+            # Display reagent placements
+            for reagent_code, locations in reagent_locations.items():
+                st.markdown(f"**Reagent {reagent_code}:**")
+                locations_df = pd.DataFrame([
+                    {
+                        "Location": f"LOC-{loc['location']}",
+                        "Capacity (mL)": loc["capacity"],
+                        "Tests Possible": loc["tests"],
+                        "Volume per Test (µL)": loc["volume"]
+                    }
+                    for loc in locations
+                ])
+                st.dataframe(locations_df, use_container_width=True)
 
 def reset_app():
     # Reset app state here... (This function was not provided in the original code)
