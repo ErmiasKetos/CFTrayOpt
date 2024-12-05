@@ -122,18 +122,33 @@ def init_google_sheets():
 def generate_tray_serial():
     return str(uuid.uuid4())[:8].upper()
 
+
 def generate_qr_code(data):
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(data)
+    qr_data = (
+        f"KETOS Fluid Tray\n"
+        f"------------------\n"
+        f"Tray ID: {data['tray_serial']}\n"
+        f"Customer: {data['name']}\n"
+        f"Location: {data['unit']}\n"
+        f"Created: {data['date']}\n"
+        f"Operator: {data['operator']}\n"
+        f"Status: Active"
+    )
+    
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4
+    )
+    qr.add_data(qr_data)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     
-
+    # Create base64 string
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
-    
-    
 
 # Update other functions ...
 def update_kcf_summary(data):
@@ -537,7 +552,15 @@ def main():
             if qc1 and qc2 and qc3 and tracking_number:
                 # Generate tray serial number and QR code
                 tray_serial = generate_tray_serial()
-                qr_data = f"Customer: {customer_info['name']}\nLocation: {customer_info['unit']}\nDate: {config_date.strftime('%Y-%m-%d')}\nSerial: {tray_serial}"
+               
+                qr_data = {
+                    'tray_serial': tray_serial,
+                    'name': customer_info['name'],
+                    'unit': customer_info['unit'],
+                    'date': config_date.strftime('%Y-%m-%d'),
+                    'operator': customer_info['operator']
+                }
+                
                 qr_code_base64 = generate_qr_code(qr_data)
                 
                 # Prepare data for KCF summary
