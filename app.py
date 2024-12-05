@@ -523,7 +523,7 @@ def main():
 
                 # Prepare data for KCF summary
                 kcf_data = [
-                    customer_info['operator'],
+                    tray_serial,
                     datetime.now().strftime("%m/%d/%Y %H:%M"),
                     customer_info['name'],
                     customer_info['unit'],
@@ -532,7 +532,7 @@ def main():
                     "Yes" if qc1 else "No",
                     "Yes" if qc2 else "No",
                     "Yes" if qc3 else "No",
-                    tray_serial,
+                    customer_info['operator'],
                     qr_data
                 ]
                 
