@@ -128,11 +128,12 @@ def generate_qr_code(data):
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     
+
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
+    return base64.b64encode(buffered.getvalue()).decode()
     
-    return img, img_str
+    
 
 # Update other functions ...
 def update_kcf_summary(data):
