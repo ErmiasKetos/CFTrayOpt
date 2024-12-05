@@ -538,7 +538,7 @@ def main():
                 # Generate tray serial number and QR code
                 tray_serial = generate_tray_serial()
                 qr_data = f"Customer: {customer_info['name']}\nLocation: {customer_info['unit']}\nDate: {config_date.strftime('%Y-%m-%d')}\nSerial: {tray_serial}"
-                qr_code, qr_code_base64 = generate_qr_code(qr_data)
+                qr_code_base64 = generate_qr_code(qr_data)
                 
                 # Prepare data for KCF summary
                 kcf_data = [
