@@ -565,8 +565,8 @@ def main():
                 
                 # Display QR code
                 st.subheader("Tray QR Code")
-                st.subheader("Tray QR Code")
-                st.image(qr_img, caption="Scan this QR code for tray information")
+                qr_image = f"data:image/png;base64,{qr_code_base64}"
+                st.image(qr_image, caption="Scan this QR code for tray information")
                 st.info(f"Tray Serial Number: {tray_serial}")
             else:
                 st.error("Please complete all QC checks and provide a tracking number before shipping.")
