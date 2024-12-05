@@ -11,6 +11,10 @@ from google.oauth2 import service_account
 from google.oauth2.service_account import Credentials
 import os
 from google.auth.exceptions import GoogleAuthError
+import qrcode
+import io
+import base64
+import uuid
 
 # Set page config
 st.set_page_config(
@@ -115,6 +119,19 @@ def init_google_sheets():
     
     return None
 
+def generate_tray_serial():
+    return str(uuid.uuid4())[:8].upper()
+
+def generate_qr_code(data):
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
 # Update other functions that reference KCFtray2024.csv
 def update_kcf_summary(data):
     sheet = init_google_sheets()
@@ -159,6 +176,22 @@ def check_kcf_summary():
         except Exception as e:
             st.error(f"Error accessing KCFtray2024.csv: {str(e)}")
     return False
+
+def add_column_headers(sheet):
+    try:
+        headers = [
+            "Operator Name", "Time/Date Tray Created", "Customer", "Unit Location",
+            "Number of Fluid Trays Produced", "Tracking Number",
+            "Sealed + Zip Locked?", "Box Sealed with Stickers?", "Carried to FedEx?",
+            "Tray Serial Number", "QR Code Data"
+        ]
+        
+        sheet.update('A1:K1', [headers])
+        sheet.format('A1:K1', {'textFormat': {'bold': True}})
+        
+        st.success("Column headers added and formatted successfully!")
+    except Exception as e:
+        st.error(f"Error adding column headers: {str(e)}")
 
 def get_reagent_color(reagent_code):
     color_map = {
@@ -483,17 +516,24 @@ def main():
         # Ship Button
         if st.button("Mark as Shipped"):
             if qc1 and qc2 and qc3 and tracking_number:
+                # Generate tray serial number and QR code
+                tray_serial = generate_tray_serial()
+                qr_data = f"Customer: {customer_info['name']}\nLocation: {customer_info['unit']}\nDate: {config_date.strftime('%Y-%m-%d')}\nSerial: {tray_serial}"
+                qr_code = generate_qr_code(qr_data)
+
                 # Prepare data for KCF summary
                 kcf_data = [
                     customer_info['operator'],
                     datetime.now().strftime("%m/%d/%Y %H:%M"),
                     customer_info['name'],
                     customer_info['unit'],
-                    num_trays,  # Add the number of trays here
+                    num_trays,
                     tracking_number,
                     "Yes" if qc1 else "No",
                     "Yes" if qc2 else "No",
-                    "Yes" if qc3 else "No"
+                    "Yes" if qc3 else "No",
+                    tray_serial,
+                    qr_data
                 ]
                 
                 if not missing_modules:
