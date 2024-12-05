@@ -80,6 +80,7 @@ def check_required_modules():
 
 
 
+
 def init_google_sheets():
     try:
         # Get the Google Sheets credentials from the Streamlit secrets
@@ -96,28 +97,45 @@ def init_google_sheets():
         )
 
         # Authorize and get the sheet
-        try:
-            client = gspread.authorize(creds)
-            # Update with the new spreadsheet ID
-            sheet = client.open_by_key('1ND6tVdQcH7_ZiYXWaS-wHjsvc2v0B4umtVp5b3-bYRc').worksheet('Sheet1')
-            
-            # Verify access
-            sheet.get_all_values()  # Test if we can read the sheet
-            return sheet
-            
-        except gspread.exceptions.APIError as api_error:
-            st.error(f"API Error: {str(api_error)}")
-            st.info("Please ensure the service account email has been given access to the spreadsheet.")
-            return None
-        except gspread.exceptions.WorksheetNotFound:
-            st.error("Worksheet 'Sheet1' not found. Please verify the worksheet name.")
-            return None
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key('1ND6tVdQcH7_ZiYXWaS-wHjsvc2v0B4umtVp5b3-bYRc').worksheet('Sheet1')
         
+        # Verify access
+        sheet.get_all_values()  # This will raise an exception if we can't access the sheet
+        return sheet
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("Spreadsheet not found. Please check the spreadsheet ID.")
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("Worksheet 'Sheet1' not found. Please check the worksheet name.")
+    except gspread.exceptions.APIError as e:
+        st.error(f"API Error: {str(e)}")
+        st.info("Please ensure the service account has been given access to the spreadsheet.")
     except Exception as e:
         st.error(f"Error initializing Google Sheets: {str(e)}")
-        st.info("Please ensure the service account has been given access to the spreadsheet.")
-        return None
+    
+    return None
 
+# Update other functions that reference KCFtray2024.csv
+def update_kcf_summary(data):
+    sheet = init_google_sheets()
+    if sheet:
+        try:
+            sheet.append_row(data)
+            return True
+        except Exception as e:
+            st.error(f"Error updating Google Sheet: {str(e)}")
+    return False
+
+def check_kcf_summary():
+    sheet = init_google_sheets()
+    if sheet:
+        try:
+            values = sheet.get_all_values()
+            if len(values) > 1:  # Assuming the first row is headers
+                return True
+        except Exception as e:
+            st.error(f"Error accessing Google Sheet: {str(e)}")
+    return False
 
 # Function to update KCFtray2024.csv
 def update_kcf_summary(data):
