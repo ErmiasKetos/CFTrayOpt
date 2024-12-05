@@ -74,14 +74,15 @@ def check_required_modules():
     return missing_modules
 
 # Function to initialize Google Sheets connection
+
 def init_google_sheets():
     try:
         # Get the Google Sheets credentials from the Streamlit secrets
-        creds_dict = st.secrets["GOOGLE_SHEETS_CREDS"]
+        creds_dict = st.secrets.get("GOOGLE_SHEETS_CREDS", None)
         
-        # Convert the private_key string to bytes
-        if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].encode().decode('unicode_escape')
+        if not creds_dict:
+            st.error("Google Sheets credentials not found in Streamlit secrets.")
+            return None
         
         # Create credentials object
         creds = service_account.Credentials.from_service_account_info(
@@ -96,6 +97,7 @@ def init_google_sheets():
     except Exception as e:
         st.error(f"Error initializing Google Sheets: {str(e)}")
         return None
+
 
 # Function to update KCFtray2024.csv
 def update_kcf_summary(data):
