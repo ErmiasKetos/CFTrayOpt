@@ -474,6 +474,9 @@ def main():
         qc2 = st.checkbox("2. Box is sealed with tape, 'Fragile' and 'This way up' stickers?")
         qc3 = st.checkbox("3. Box is carried to FedEx by KETOS for 2-day Air or Ground shipping only?")
 
+        # Number of Fluid Trays Produced
+        num_trays = st.number_input("Number of Fluid Trays Produced", min_value=1, value=1, step=1)
+
         # Tracking Number Input
         tracking_number = st.text_input("Tracking Number")
 
@@ -486,7 +489,7 @@ def main():
                     datetime.now().strftime("%m/%d/%Y %H:%M"),
                     customer_info['name'],
                     customer_info['unit'],
-                    len(selected_experiments),
+                    num_trays,  # Add the number of trays here
                     tracking_number,
                     "Yes" if qc1 else "No",
                     "Yes" if qc2 else "No",
@@ -494,7 +497,7 @@ def main():
                 ]
                 
                 if not missing_modules:
-                    # Update KCFtray2024.csv
+                    # Update KCFtray2024
                     if update_kcf_summary(kcf_data):
                         st.success("Tray marked as shipped and KCF summary updated successfully!")
                     else:
