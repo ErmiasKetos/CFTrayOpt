@@ -5,7 +5,7 @@ from reagent_optimizer import ReagentOptimizer
 from datetime import datetime
 from collections import defaultdict
 import importlib
-import spread
+import gspread
 import json
 from google.oauth2 import service_account
 from google.oauth2.service_account import Credentials
