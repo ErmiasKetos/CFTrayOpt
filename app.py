@@ -25,48 +25,91 @@ st.set_page_config(
 )
 
 # Custom CSS (unchanged)
+
 st.markdown("""
 <style>
+    /* Main app background */
     .stApp {
-        background-color: #f0f2f6;
+        background-color: #e8f1ff;
     }
+    
+    /* Main content area */
     .main {
         padding: 2rem;
+        background: linear-gradient(to bottom, #f5f9ff, #e8f1ff);
     }
+    
+    /* Buttons */
     .stButton>button {
-        background-color: #4CAF50;
+        background-color: #1e88e5;
         color: white;
         font-weight: bold;
+        transition: all 0.3s ease;
     }
+    
     .stButton>button:hover {
-        background-color: #45a049;
+        background-color: #1565c0;
+        box-shadow: 0 4px 8px rgba(30, 136, 229, 0.3);
     }
+    
+    /* Expander components */
     .stExpander {
-        background-color: white;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(30, 136, 229, 0.1);
+        border-left: 4px solid #1e88e5;
     }
+    
+    /* Top padding adjustment */
     .css-1d391kg {
         padding-top: 3rem;
     }
+    
+    /* Info box */
     .info-box {
-        background-color: #e1f5fe;
+        background-color: #bbdefb;
         padding: 1rem;
-        border-radius: 5px;
+        border-radius: 8px;
         margin: 1rem 0;
+        border-left: 4px solid #2196f3;
     }
+    
+    /* Warning box */
     .warning-box {
-        background-color: #fff3e0;
+        background-color: #e3f2fd;
         padding: 1rem;
-        border-radius: 5px;
+        border-radius: 8px;
         margin: 1rem 0;
+        border-left: 4px solid #64b5f6;
     }
+    
+    /* Header box */
     .header-box {
-        background-color: #f1f8e9;
-        padding: 1rem;
-        border-radius: 5px;
+        background: linear-gradient(135deg, #1976d2, #2196f3);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
         margin: 1rem 0;
         text-align: center;
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+    }
+    
+    /* Additional blue accents */
+    .stSelectbox [data-baseweb="select"] {
+        border-color: #2196f3;
+    }
+    
+    .stCheckbox span {
+        color: #1565c0;
+    }
+    
+    .stTextInput input {
+        border-color: #90caf9;
+    }
+    
+    .stTextInput input:focus {
+        border-color: #1e88e5;
+        box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.2);
     }
 </style>
 """, unsafe_allow_html=True)
